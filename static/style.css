@@ -1,6 +1,8 @@
 body {
+  background-color: lightgray;
   font-family: Arial, Helvetica, sans-serif;
   font-size: medium;
+  margin: 0px;
 }
 
 h1 {
@@ -14,16 +16,21 @@ table, th, td {
 }
 
 th {
-  background-color: darkblue;
+  background-color: darkcyan;
   color: white
 }
 
 input[type=submit] {
-  background-color: darkblue;
+  background-color: darkcyan;
   color: white;
 }
 
-
+nav {
+  background-color: darkcyan;
+  color: white;
+  padding: 10px;
+  margin: 0;
+}
 
 .odd_row {
   background-color: white;
@@ -34,7 +41,7 @@ input[type=submit] {
 }
 
 .button {
-  background-color: darkblue;
+  background-color: darkcyan;
   color: white;
 }
 
@@ -46,4 +53,23 @@ input[type=submit] {
 .button:disabled {
   background-color: gray;
   color: white;
+}
+
+.header_block {
+  background-color: darkcyan;
+  color: white;
+  margin: 0;
+  padding: 10px;
+}
+
+.main_block {
+  background-color: lightgray;
+  padding: 10px;
+  text-align: center;
+}
+
+.center{
+  margin-left: auto;
+  margin-right: auto;
+  align-items: center;
 }

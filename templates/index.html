@@ -1,4 +1,25 @@
 {% extends 'base.html' %}
 {% block main %}
-    Ram Prices are gonna go up. Or maybe down?
+<nav>
+<div class="header_block">    
+    <h1>Hardware Genie</h1>
+</div>
+</nav>
+<div class="main_block">
+    <h2>Welcome to Hardware Genie!</h2>
+    <p>Hardware Genie is a web application that allows users to browse and search for computer hardware parts. Users can view details about each part, including its name, description, price, and an image.</p>
+    <div class="center">
+        <h2>Browse by Category</h2>
+    </div>
+    <table class="center">
+        <tr>
+            <td><a href="{{ url_for('memory_graphs') }}"><image src="{{ url_for('static', filename='images/memory.jpg') }}" alt="Memory"></a></td>
+            <td><a href="{{ url_for('gpu_graphs') }}"><image src="{{ url_for('static', filename='images/gpu.jpg') }}" alt="GPU"></a></td>
+        </tr>
+        <tr>
+            <td><a href="{{ url_for('cpu_graphs') }}"><image src="{{ url_for('static', filename='images/cpu.jpg') }}" alt="CPU"></a></td>
+            <td><a href="{{ url_for('storage_graphs') }}"><image src="{{ url_for('static', filename='images/storage.jpg') }}" alt="Storage"></a></td>
+        </tr>
+    </table>
+</div>
 {% endblock %}
