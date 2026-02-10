@@ -1,2 +1,4 @@
 src/app/__pycache__/__init__.cpython-313.pyc
 src/app/__pycache__/routes.cpython-313.pyc
+instance/parts.db
+src/app/__pycache__/models.cpython-313.pyc

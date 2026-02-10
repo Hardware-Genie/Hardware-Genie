@@ -1,5 +1,8 @@
-from flask import render_template, redirect, url_for, request
+
+from flask import Flask, render_template, jsonify, redirect, url_for, request
 from app import app
+import pandas as pd
+import json
 
 @app.route('/')
 @app.route('/index')
@@ -10,8 +13,12 @@ def index():
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
-    """Render the memory page."""
-    return render_template('memory_graphs.html')
+    csv_path = 'static/data/memory_data.csv'
+    df = pd.read_csv(csv_path)
+    labels = ['January', 'February', 'March', 'April', 'May', 'June']
+    data = [0, 10, 15, 8, 22, 18, 25]
+    
+    return render_template('memory_graphs.html', labels=labels, data=data)
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
