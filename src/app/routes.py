@@ -27,3 +27,14 @@ def cpu_graphs():
 def storage_graphs():
     """Render the Storage page."""
     return render_template('storage_graphs.html')
+
+@app.route('/motherboardgraphs', methods=['GET', 'POST'])
+def motherboard_graphs():
+    """Render the motherboard page."""
+    return render_template('motherboard_graphs.html')
+
+@app.route('/powersupplygraphs', methods=['GET', 'POST'])
+def powersupply_graphs():
+    """Render the power supply page."""
+    return render_template('powersupply_graphs.html')
+

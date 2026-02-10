@@ -20,6 +20,10 @@
             <td><a href="{{ url_for('cpu_graphs') }}"><image src="{{ url_for('static', filename='images/cpu.jpg') }}" alt="CPU"></a></td>
             <td><a href="{{ url_for('storage_graphs') }}"><image src="{{ url_for('static', filename='images/storage.jpg') }}" alt="Storage"></a></td>
         </tr>
+         <tr>
+            <td><a href="{{ url_for('motherboard_graphs') }}"><image src="{{ url_for('static', filename='images/motherboard.jpg') }}" alt="Motherboard"></a></td>
+            <td><a href="{{ url_for('powersupply_graphs') }}"><image src="{{ url_for('static', filename='images/powersupply.jpg') }}" alt="Power Supply"></a></td>
+        </tr>
     </table>
 </div>
 {% endblock %}
