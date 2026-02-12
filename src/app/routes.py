@@ -13,12 +13,12 @@ def index():
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
-    csv_path = 'static/data/memory_data.csv'
+    csv_path = 'static/data/memory.csv'
     df = pd.read_csv(csv_path)
-    labels = ['January', 'February', 'March', 'April', 'May', 'June']
-    data = [0, 10, 15, 8, 22, 18, 25]
-    
-    return render_template('memory_graphs.html', labels=labels, data=data)
+    df = df.dropna(subset=['price'])
+    labels = df['name'].tolist()
+    data = df['price'].tolist()
+    return render_template('memory_graphs.html', labels=json.dumps(labels), data=json.dumps(data))
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
