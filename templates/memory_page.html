@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block main %}
+    <div class="main_block">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Price</th>
+            </tr>
+            {% for i in range(labels|length) %}
+            <tr>
+                <td>{{ labels[i] }}</td>
+                <td>{{ data[i] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endblock %}

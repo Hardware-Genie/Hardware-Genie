@@ -11,6 +11,15 @@ def index():
     """Render the main index page."""
     return render_template('index.html')
 
+@app.route('/memory', methods=['GET', 'POST'])
+def memory_page():
+    csv_path = 'static/data/memory.csv'
+    df = pd.read_csv(csv_path)
+    df = df.dropna(subset=['price'])
+    labels = df['name'].tolist()
+    data = df['price'].tolist()
+    return render_template('memory_page.html', labels=labels, data=data)
+
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
     csv_path = 'static/data/memory.csv'
@@ -18,7 +27,7 @@ def memory_graphs():
     df = df.dropna(subset=['price'])
     labels = df['name'].tolist()
     data = df['price'].tolist()
-    return render_template('memory_graphs.html', labels=json.dumps(labels), data=json.dumps(data))
+    return render_template('memory_graphs.html', labels=labels, data=data)
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():

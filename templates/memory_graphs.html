@@ -2,15 +2,14 @@
 {% block main %}
 <h1>Memory Graphs</h1>
 
-
     <div style="height: 50vh; width: 50%;">
         <canvas id="myChart"></canvas>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const labels = JSON.parse('{{ labels | safe }}');
-            const chartData = JSON.parse('{{ data | safe }}');
+            const labels = {{ labels | tojson | safe }};
+            const chartData = {{ data | tojson | safe }};
 
             const data = {
                 labels: labels,
