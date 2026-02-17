@@ -8,8 +8,8 @@
             </tr>
             {% for i in range(labels|length) %}
             <tr>
-                <td>{{ labels[i] }}</td>
-                <td>{{ data[i] }}</td>
+                <td><a href="{{ url_for('memory_graphs') }}" style="text-decoration:none"><div>{{ labels[i] }}</div></a></td>
+                <td>${{ price[i] }}</td>
             </tr>
             {% endfor %}
         </table>

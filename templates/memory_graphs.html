@@ -9,7 +9,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const labels = {{ labels | tojson | safe }};
-            const chartData = {{ data | tojson | safe }};
+            const chartData = {{ price | tojson | safe }};
 
             const data = {
                 labels: labels,

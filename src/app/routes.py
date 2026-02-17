@@ -4,6 +4,28 @@ from app import app
 import pandas as pd
 import json
 
+class csv_data_reader:
+    def __init__(self, labels, price):
+        self.labels = labels
+        self.price = price
+
+    def from_csv(self, file_name):
+        csv_path = f'static/data/{file_name}.csv'
+        df = pd.read_csv(csv_path)
+        df = df.dropna(subset=['price'])
+        self.labels = df['name'].tolist()
+        self.price = df['price'].tolist()
+
+    def to_dict(self):
+        return {
+            'labels': self.labels,
+            'price': self.price
+        }
+
+memory_csv_reader = csv_data_reader([], [])
+memory_csv_reader.from_csv('memory')
+
+
 @app.route('/')
 @app.route('/index')
 @app.route('/index.html')
@@ -13,21 +35,17 @@ def index():
 
 @app.route('/memory', methods=['GET', 'POST'])
 def memory_page():
-    csv_path = 'static/data/memory.csv'
-    df = pd.read_csv(csv_path)
-    df = df.dropna(subset=['price'])
-    labels = df['name'].tolist()
-    data = df['price'].tolist()
-    return render_template('memory_page.html', labels=labels, data=data)
+    dict=memory_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('memory_page.html', labels=labels, price=price)
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
-    csv_path = 'static/data/memory.csv'
-    df = pd.read_csv(csv_path)
-    df = df.dropna(subset=['price'])
-    labels = df['name'].tolist()
-    data = df['price'].tolist()
-    return render_template('memory_graphs.html', labels=labels, data=data)
+    dict=memory_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('memory_graphs.html', labels=labels, price=price)
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
