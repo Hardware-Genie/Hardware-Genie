@@ -13,13 +13,17 @@ class csv_data_reader:
         csv_path = f'static/data/{file_name}.csv'
         df = pd.read_csv(csv_path)
         df = df.dropna(subset=['price'])
+        df = df.sort_values(by='price', ascending=False)
         self.labels = df['name'].tolist()
         self.price = df['price'].tolist()
+        self.ppgb = df['price_per_gb'].tolist()
+        print(df['price'].median())
 
     def to_dict(self):
         return {
             'labels': self.labels,
-            'price': self.price
+            'price': self.price,
+            'ppgb': self.ppgb
         }
 
 memory_csv_reader = csv_data_reader([], [])
@@ -38,7 +42,8 @@ def memory_page():
     dict=memory_csv_reader.to_dict()
     labels = dict['labels']
     price = dict['price']
-    return render_template('memory_page.html', labels=labels, price=price)
+    price_per_gb = dict['ppgb']
+    return render_template('memory_page.html', labels=labels, price=price, price_per_gb=price_per_gb)
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
