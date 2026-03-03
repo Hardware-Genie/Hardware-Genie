@@ -5,30 +5,36 @@ import pandas as pd
 import json
 
 class csv_data_reader:
-    def __init__(self, labels, price):
+    def __init__(self, labels, price, date):
         self.labels = labels
         self.price = price
+        self.date = date
 
-    def from_csv(self, file_name):
+    def from_csv(self, file_name, sort, ascending):
         csv_path = f'static/data/{file_name}.csv'
         df = pd.read_csv(csv_path)
         df = df.dropna(subset=['price'])
-        df = df.sort_values(by='price', ascending=False)
-        self.labels = df['name'].tolist()
+        df = df.sort_values(by=sort, ascending=ascending)
+        self.labels = df['product_name'].tolist()
         self.price = df['price'].tolist()
-        self.ppgb = df['price_per_gb'].tolist()
+        self.date = df['snapshot_date'].tolist()
         print(df['price'].median())
 
     def to_dict(self):
         return {
             'labels': self.labels,
             'price': self.price,
-            'ppgb': self.ppgb
+            'date': self.date,
         }
 
-memory_csv_reader = csv_data_reader([], [])
-memory_csv_reader.from_csv('memory')
+#memory_csv_reader = csv_data_reader([], [], [])
+#memory_csv_reader.from_csv('memory')
 
+gpu_csv_reader = csv_data_reader([], [], [])
+gpu_csv_reader.from_csv('newegg_price_history', 'snapshot_date', True)
+
+gpu_csv_reader_sort = csv_data_reader([], [], [])
+gpu_csv_reader_sort.from_csv('newegg_price_history', 'snapshot_date', False)
 
 @app.route('/')
 @app.route('/index')
@@ -52,10 +58,21 @@ def memory_graphs():
     price = dict['price']
     return render_template('memory_graphs.html', labels=labels, price=price)
 
+@app.route('/gpu', methods=['GET', 'POST'])
+def gpu_page():
+    dict=gpu_csv_reader_sort.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    date = dict['date']
+    return render_template('gpu_page.html', labels=labels, price=price, date=date)
+
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
-    """Render the GPU page."""
-    return render_template('gpu_graphs.html')
+    dict=gpu_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    date = dict['date']
+    return render_template('gpu_graphs.html', labels=labels, price=price, date=date)
 
 @app.route('/cpugraphs', methods=['GET', 'POST'])
 def cpu_graphs():

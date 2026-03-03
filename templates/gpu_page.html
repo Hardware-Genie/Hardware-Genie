@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block main %}
+    <div class="main_block">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Price per GB</th>
+            </tr>
+            {% for i in range(labels|length) %}
+            <tr>
+                <td><a href="{{ url_for('gpu_graphs') }}" style="text-decoration:none"><div>{{ labels[i] }}</div></a></td>
+                <td>${{ price[i] }}</td>
+                <td>${{ date[i] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endblock %}
