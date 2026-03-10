@@ -4,6 +4,13 @@ from app import app
 import pandas as pd
 import json
 
+from app.forms import WebsiteToScrape
+from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
+from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
+from app import tasks
+import scrapy
+from scrapy.crawler import CrawlerProcess
+
 class csv_data_reader:
     def __init__(self, labels, price, date):
         self.labels = labels
@@ -42,6 +49,30 @@ gpu_csv_reader_sort.from_csv('newegg_price_history', 'snapshot_date', False)
 def index():
     """Render the main index page."""
     return render_template('index.html')
+
+@app.route('/scraper', methods=['GET', 'POST'])
+def scraper():
+    form = WebsiteToScrape()
+    if form.validate_on_submit():
+        # Process the form data
+        name = form.name.data
+        url = form.url.data
+
+        # enqueue a Celery job rather than running inline
+        
+        task = tasks.crawl_spider.delay(name, url)
+        # the request returns immediately; the worker will pick up the crawl
+
+        print(f"Name: {name}, URL: {url}")
+        return redirect(url_for('scraper_status', task_id=task.id))
+    return render_template('scraper.html', form=form)
+
+@app.route('/scraper/status/<task_id>')
+def scraper_status(task_id):
+    from celery.result import AsyncResult
+    from app.tasks import celery
+    result = AsyncResult(task_id, app=celery)
+    return render_template('scraper_status.html', task_id=task_id, state=result.state, result=result.result, info=result.info)
 
 @app.route('/memory', methods=['GET', 'POST'])
 def memory_page():
