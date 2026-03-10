@@ -13,16 +13,16 @@
     </div>
     <table class="center">
         <tr>
-            <td><a href="{{ url_for('memory_page') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('memory_page') }}"><br>Memory</a></td>
+            <td><a href="{{ url_for('memory_page') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a></td>
             <td><a href="{{ url_for('gpu_page') }}"><image src="{{ url_for('static', filename='images/gpu.jpg') }}" alt="GPU"></a></td>
         </tr>
         <tr>
-            <td><a href="{{ url_for('cpu_graphs') }}"><image src="{{ url_for('static', filename='images/cpu.jpg') }}" alt="CPU"></a></td>
-            <td><a href="{{ url_for('storage_graphs') }}"><image src="{{ url_for('static', filename='images/storage.jpg') }}" alt="Storage"></a></td>
+            <td><a href="{{ url_for('cpu_page') }}"><image src="{{ url_for('static', filename='images/cpu.jpg') }}" alt="CPU"></a></td>
+            <td><a href="{{ url_for('storage_page') }}"><image src="{{ url_for('static', filename='images/storage.jpg') }}" alt="Storage"></a></td>
         </tr>
          <tr>
-            <td><a href="{{ url_for('motherboard_graphs') }}"><image src="{{ url_for('static', filename='images/motherboard.jpg') }}" alt="Motherboard"></a></td>
-            <td><a href="{{ url_for('powersupply_graphs') }}"><image src="{{ url_for('static', filename='images/powersupply.jpg') }}" alt="Power Supply"></a></td>
+            <td><a href="{{ url_for('motherboard_page') }}"><image src="{{ url_for('static', filename='images/motherboard.jpg') }}" alt="Motherboard"></a></td>
+            <td><a href="{{ url_for('powersupply_page') }}"><image src="{{ url_for('static', filename='images/powersupply.jpg') }}" alt="Power Supply"></a></td>
         </tr>
     </table>
 </div>

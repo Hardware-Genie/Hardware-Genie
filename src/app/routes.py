@@ -4,7 +4,7 @@ from app import app
 import pandas as pd
 import json
 
-class csv_data_reader:
+class csv_name_reader:
     def __init__(self, labels, price, date):
         self.labels = labels
         self.price = price
@@ -27,14 +27,47 @@ class csv_data_reader:
             'date': self.date,
         }
 
-#memory_csv_reader = csv_data_reader([], [], [])
-#memory_csv_reader.from_csv('memory')
 
-gpu_csv_reader = csv_data_reader([], [], [])
-gpu_csv_reader.from_csv('newegg_price_history', 'snapshot_date', True)
+class csv_data_reader:
+    def __init__(self, labels, price):
+        self.labels = labels
+        self.price = price
 
-gpu_csv_reader_sort = csv_data_reader([], [], [])
-gpu_csv_reader_sort.from_csv('newegg_price_history', 'snapshot_date', False)
+    def from_csv(self, file_name, sort, ascending):
+        csv_path = f'static/data/{file_name}.csv'
+        df = pd.read_csv(csv_path)
+        df = df.dropna(subset=['price'])
+        df = df.sort_values(by=sort, ascending=ascending)
+        self.labels = df['name'].tolist()
+        self.price = df['price'].tolist()
+        print(df['price'].median())
+
+    def to_dict(self):
+        return {
+            'labels': self.labels,
+            'price': self.price,
+        }
+
+cpu_csv_reader = csv_data_reader([], [])
+cpu_csv_reader.from_csv('July 23 2025/cpu', 'price', True)
+
+memory_csv_reader = csv_data_reader([], [])
+memory_csv_reader.from_csv('July 23 2025/memory', 'price', True)
+
+gpu_csv_reader = csv_data_reader([], [])
+gpu_csv_reader.from_csv('July 23 2025/video-card', 'price', True)
+
+gpu_csv_reader_sort = csv_data_reader([], [])
+gpu_csv_reader_sort.from_csv('July 23 2025/video-card', 'price', False)
+
+storage_csv_reader = csv_data_reader([], [])
+storage_csv_reader.from_csv('July 23 2025/internal-hard-drive', 'price', True)
+
+mb_csv_reader = csv_data_reader([], [])
+mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
+
+psu_csv_reader = csv_data_reader([], [])
+psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
 
 @app.route('/')
 @app.route('/index')
@@ -48,8 +81,7 @@ def memory_page():
     dict=memory_csv_reader.to_dict()
     labels = dict['labels']
     price = dict['price']
-    price_per_gb = dict['ppgb']
-    return render_template('memory_page.html', labels=labels, price=price, price_per_gb=price_per_gb)
+    return render_template('memory_page.html', labels=labels, price=price)
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
@@ -63,31 +95,57 @@ def gpu_page():
     dict=gpu_csv_reader_sort.to_dict()
     labels = dict['labels']
     price = dict['price']
-    date = dict['date']
-    return render_template('gpu_page.html', labels=labels, price=price, date=date)
+    return render_template('gpu_page.html', labels=labels, price=price)
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
     dict=gpu_csv_reader.to_dict()
     labels = dict['labels']
     price = dict['price']
-    date = dict['date']
-    return render_template('gpu_graphs.html', labels=labels, price=price, date=date)
+    return render_template('gpu_graphs.html', labels=labels, price=price)
+
+@app.route('/cpu', methods=['GET', 'POST'])
+def cpu_page():
+    dict=cpu_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('cpu_page.html', labels=labels, price=price)
 
 @app.route('/cpugraphs', methods=['GET', 'POST'])
 def cpu_graphs():
     """Render the CPU page."""
     return render_template('cpu_graphs.html')
 
+@app.route('/storage', methods=['GET', 'POST'])
+def storage_page():
+    dict=storage_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('storage_page.html', labels=labels, price=price)
+
 @app.route('/storagegraphs', methods=['GET', 'POST'])
 def storage_graphs():
     """Render the Storage page."""
     return render_template('storage_graphs.html')
 
+@app.route('/motherboard', methods=['GET', 'POST'])
+def motherboard_page():
+    dict=mb_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('motherboard_page.html', labels=labels, price=price)
+
 @app.route('/motherboardgraphs', methods=['GET', 'POST'])
 def motherboard_graphs():
     """Render the motherboard page."""
     return render_template('motherboard_graphs.html')
+
+@app.route('/powersupply', methods=['GET', 'POST'])
+def powersupply_page():
+    dict=psu_csv_reader.to_dict()
+    labels = dict['labels']
+    price = dict['price']
+    return render_template('powersupply_page.html', labels=labels, price=price)
 
 @app.route('/powersupplygraphs', methods=['GET', 'POST'])
 def powersupply_graphs():
