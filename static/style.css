@@ -1,3 +1,8 @@
+:root {
+  --primary-bg-color: white;
+  --primary-color: rgb(56,99,90);
+}
+
 body {
   background-color: rgb(255, 255, 255);
   font-family: Arial, Helvetica, sans-serif;
@@ -16,24 +21,24 @@ table, th, td {
 }
 
 th {
-  background-color: rgb(67, 83, 83);
+  background-color: var(--primary-color);
   color: white
 }
 
 input[type=submit] {
-  background-color: rgb(67, 83, 83);
+  background-color: var(--primary-color);
   color: white;
 }
 
 nav {
-  background-color: rgb(67, 83, 83);
+  background-color: var(--primary-color);
   color: white;
   padding: 10px;
   margin: 0;
 }
 
 footer {
-  background-color: rgb(67, 83, 83);
+  background-color: var(--primary-color);
   color: white;
   padding: 10px;
   margin: 0;
@@ -63,14 +68,14 @@ footer {
 }
 
 .header_block {
-  background-color: rgb(67, 83, 83);
+  background-color: var(--primary-color);
   color: rgb(255, 255, 255);
   margin: 0;
   padding: 10px;
 }
 
 .main_block {
-  background-color: rgb(255, 255, 255);
+  background-color: var(--primary-bg-color);
   padding: 10px;
   text-align: center;
 }
