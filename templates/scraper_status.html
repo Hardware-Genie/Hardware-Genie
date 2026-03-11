@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraper Job Status</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Scraper Job Status</h1>
+        <p><strong>Task ID:</strong> {{ task_id }}</p>
+        <p><strong>State:</strong> {{ state }}</p>
+        {% if state == 'PENDING' %}
+            <p>The job is pending execution.</p>
+        {% elif state == 'PROGRESS' %}
+            <p>The job is in progress...</p>
+        {% elif state == 'SUCCESS' %}
+            <p>The job completed successfully!</p>
+            <p><strong>Result:</strong> {{ result }}</p>
+        {% elif state == 'FAILURE' %}
+            <p>The job failed.</p>
+            <p><strong>Error:</strong> {{ info }}</p>
+        {% else %}
+            <p>Unknown state: {{ state }}</p>
+        {% endif %}
+        <p><a href="{{ url_for('scraper') }}">Back to Scraper</a></p>
+        <script>
+            // Auto-refresh every 5 seconds if not completed
+            if ('{{ state }}' !== 'SUCCESS' && '{{ state }}' !== 'FAILURE') {
+                setTimeout(function() {
+                    location.reload();
+                }, 5000);
+            }
+        </script>
+    </div>
+</body>
+</html>
