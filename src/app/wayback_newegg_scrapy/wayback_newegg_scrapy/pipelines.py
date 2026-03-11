@@ -11,6 +11,25 @@ import csv
 import os
 
 
+def _get_data_dir():
+    """
+    Determine the data directory path.
+    From pipelines.py location:
+      wayback_newegg_scrapy/wayback_newegg_scrapy/pipelines.py
+      → go up 5 levels to project root
+      → then static/data/
+    """
+    # Get the directory where this file is
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Go up to find the project root
+    project_root = os.path.abspath(os.path.join(current_dir, "..", "..", "..", ".."))
+    data_dir = os.path.join(project_root, "static", "data", "newegg_price_history_files")
+    
+    # Ensure the directory exists
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
 class SQLitePipeline:
     """
     Saves every price record to a local SQLite database.
@@ -18,10 +37,15 @@ class SQLitePipeline:
     duplicate entries if you run the spider multiple times.
     """
 
-    DB_FILE = "newegg_price_history.db"
+    def __init__(self):
+        self.data_dir = _get_data_dir()
+        # Will be set in open_spider
 
     def open_spider(self, spider):
-        self.conn   = sqlite3.connect(self.DB_FILE)
+        self.category = getattr(spider, 'category', 'other')
+        self.db_file = os.path.join(self.data_dir, f"{self.category}_price_history.db")
+        
+        self.conn   = sqlite3.connect(self.db_file)
         self.cursor = self.conn.cursor()
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS price_history (
@@ -36,12 +60,12 @@ class SQLitePipeline:
             )
         """)
         self.conn.commit()
-        spider.logger.info(f"SQLite database ready: {self.DB_FILE}")
+        spider.logger.info(f"SQLite database ready: {self.db_file}")
 
     def close_spider(self, spider):
         self._print_summary()
         self.conn.close()
-        spider.logger.info(f"SQLite database closed: {self.DB_FILE}")
+        spider.logger.info(f"SQLite database closed: {self.db_file}")
 
     def process_item(self, item, spider):
         try:
@@ -99,9 +123,12 @@ class CSVPipeline:
     Sorted by product name then date at close.
     """
 
-    CSV_FILE = "newegg_price_history.csv"
+    def __init__(self):
+        self.data_dir = _get_data_dir()
 
     def open_spider(self, spider):
+        self.category = getattr(spider, 'category', 'other')
+        self.csv_file = os.path.join(self.data_dir, f"{self.category}.csv")
         self.rows = []
 
     def close_spider(self, spider):
@@ -109,10 +136,33 @@ class CSVPipeline:
             spider.logger.warning("No rows to write to CSV")
             return
 
-        # Sort by product then date for clean output
-        self.rows.sort(key=lambda r: (r["product_name"], r["snapshot_date"]))
+        # Load existing data if file exists
+        existing_rows = []
+        if os.path.exists(self.csv_file):
+            try:
+                with open(self.csv_file, "r", newline="", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    existing_rows = list(reader)
+            except (FileNotFoundError, csv.Error):
+                existing_rows = []
 
-        with open(self.CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        # Combine existing and new rows
+        all_rows = existing_rows + self.rows
+
+        # Remove duplicates based on (product_name, snapshot_date)
+        seen = set()
+        unique_rows = []
+        for row in all_rows:
+            key = (row["product_name"], row["snapshot_date"])
+            if key not in seen:
+                seen.add(key)
+                unique_rows.append(row)
+
+        # Sort by product then date
+        unique_rows.sort(key=lambda r: (r["product_name"], r["snapshot_date"]))
+
+        # Write back the unique rows
+        with open(self.csv_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
                 "product_name",
                 "snapshot_date",
@@ -121,9 +171,9 @@ class CSVPipeline:
                 "archive_url",
             ])
             writer.writeheader()
-            writer.writerows(self.rows)
+            writer.writerows(unique_rows)
 
-        print(f"\n  ✓ CSV saved: {self.CSV_FILE}  ({len(self.rows)} records)")
+        print(f"\n  ✓ CSV saved: {self.csv_file}  ({len(unique_rows)} total records, {len(self.rows)} new)")
 
     def process_item(self, item, spider):
         self.rows.append({

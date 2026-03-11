@@ -16,17 +16,24 @@ table, th, td {
 }
 
 th {
-  background-color: darkcyan;
+  background-color: rgb(67, 83, 83);
   color: white
 }
 
 input[type=submit] {
-  background-color: darkcyan;
+  background-color: rgb(67, 83, 83);
   color: white;
 }
 
 nav {
-  background-color: darkcyan;
+  background-color: rgb(67, 83, 83);
+  color: white;
+  padding: 10px;
+  margin: 0;
+}
+
+footer {
+  background-color: rgb(67, 83, 83);
   color: white;
   padding: 10px;
   margin: 0;
@@ -56,8 +63,8 @@ nav {
 }
 
 .header_block {
-  background-color: darkcyan;
-  color: white;
+  background-color: rgb(67, 83, 83);
+  color: rgb(255, 255, 255);
   margin: 0;
   padding: 10px;
 }
