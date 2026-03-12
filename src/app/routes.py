@@ -32,7 +32,6 @@ class csv_name_reader:
         self.labels = df['product_name'].tolist()
         self.price = df['price'].tolist()
         self.date = df['snapshot_date'].tolist()
-        print(df['price'].median())
 
     def to_dict(self):
         return {
@@ -54,7 +53,7 @@ class csv_data_reader:
         df = df.sort_values(by=sort, ascending=ascending)
         self.labels = df['name'].tolist()
         self.price = df['price'].tolist()
-        print(df['price'].median())
+        # print(df['price'].median())
 
     def to_dict(self):
         return {
