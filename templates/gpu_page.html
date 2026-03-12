@@ -7,10 +7,11 @@
                 <th>Price</th>
                 <th>Date</th>
             </tr>
-            {% for i in range(labels|length) %}
+            {% for i in range(names|length) %}
             <tr>
-                <td><a href="{{ url_for('gpu_graphs') }}" style="text-decoration:none"><div>{{ labels[i] }}</div></a></td>
+                <td><a href="{{ url_for('gpu_graphs') }}" style="text-decoration:none"><div>{{ names[i] }}</div></a></td>
                 <td>${{ price[i] }}</td>
+                <td>{{ date[i] }}</td>
             </tr>
             {% endfor %}
         </table>

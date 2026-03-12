@@ -8,11 +8,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const labels = {{ date | tojson | safe }};
+            const date = {{ date | tojson | safe }};
             const chartData = {{ price | tojson | safe }};
 
             const data = {
-                labels: labels,
+                labels: date,
                 datasets: [{
                     label: 'GPU Prices',
                     backgroundColor: 'rgba(45, 222, 54, 0.6)',

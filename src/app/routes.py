@@ -18,29 +18,9 @@ from app import tasks
 import scrapy
 from scrapy.crawler import CrawlerProcess
 
-class csv_name_reader:
-    def __init__(self, labels, price, date):
-        self.labels = labels
-        self.price = price
-        self.date = date
-
-    def from_csv(self, file_name, sort, ascending):
-        csv_path = f'static/data/{file_name}.csv'
-        df = pd.read_csv(csv_path)
-        df = df.dropna(subset=['price'])
-        df = df.sort_values(by=sort, ascending=ascending)
-        self.labels = df['product_name'].tolist()
-        self.price = df['price'].tolist()
-        self.date = df['snapshot_date'].tolist()
-
-    def to_dict(self):
-        return {
-            'labels': self.labels,
-            'price': self.price,
-            'date': self.date,
-        }
 
 
+# This is for the old data from the github instead of our scraper
 class csv_data_reader:
     def __init__(self, labels, price):
         self.labels = labels
@@ -81,6 +61,43 @@ mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
 
 psu_csv_reader = csv_data_reader([], [])
 psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
+# end of the old data reader
+
+# This is for the new data from our scraper
+class scraper_csv_reader:
+    def __init__(self, name, price, date):
+        self.name = name
+        self.price = price
+        self.date = date
+
+    def from_csv(self, file_name, sort_by, ascending_bool):
+        csv_path = f'static/data/newegg_price_history_files/{file_name}.csv'
+        df = pd.read_csv(csv_path)
+        df = df.dropna(subset=['price'])
+        df = df.sort_values(by=sort_by, ascending=ascending_bool)
+        self.name = df['product_name'].tolist()
+        self.price = df['price'].tolist()
+        self.date = df['snapshot_date'].tolist()
+
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'price': self.price,
+            'date': self.date,
+        }
+
+    #dont touch these unless you know what you're doing
+new_cpu_csv_reader = scraper_csv_reader([], [], [])
+new_cpu_csv_reader.from_csv('cpu', 'price', True)
+
+new_memory_csv_reader = scraper_csv_reader([], [], [])
+new_memory_csv_reader.from_csv('memory', 'price', True)
+
+new_gpu_csv_reader = scraper_csv_reader([], [], [])
+new_gpu_csv_reader.from_csv('video-card', 'price', True)
+
+new_storage_csv_reader = scraper_csv_reader([], [], [])
+new_storage_csv_reader.from_csv('internal-hard-drive', 'price', True)
 
 @app.route('/')
 @app.route('/index')
@@ -115,54 +132,60 @@ def scraper_status(task_id):
 
 @app.route('/memory', methods=['GET', 'POST'])
 def memory_page():
-    dict=memory_csv_reader.to_dict()
-    labels = dict['labels']
+    dict=new_memory_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('memory_page.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('memory_page.html', names=names, price=price, date=date)
 
 @app.route('/memorygraphs', methods=['GET', 'POST'])
 def memory_graphs():
-    dict=memory_csv_reader.to_dict()
-    labels = dict['labels']
+    dict=new_memory_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('memory_graphs.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('memory_graphs.html', names=names, price=price, date=date)
 
 @app.route('/gpu', methods=['GET', 'POST'])
 def gpu_page():
-    dict=gpu_csv_reader_sort.to_dict()
-    labels = dict['labels']
+    dict=new_gpu_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('gpu_page.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('gpu_page.html', names=names, price=price, date=date)
 
 @app.route('/gpugraphs', methods=['GET', 'POST'])
 def gpu_graphs():
-    dict=gpu_csv_reader.to_dict()
-    labels = dict['labels']
+    dict=new_gpu_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('gpu_graphs.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('gpu_graphs.html', names=names, price=price, date=date)
 
 @app.route('/cpu', methods=['GET', 'POST'])
 def cpu_page():
-    dict=cpu_csv_reader.to_dict()
-    labels = dict['labels']
+    dict=new_cpu_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('cpu_page.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('cpu_page.html', names=names, price=price, date=date)
 
 @app.route('/cpugraphs', methods=['GET', 'POST'])
 def cpu_graphs():
-    """Render the CPU page."""
+    """Render the CPU graphs."""
     return render_template('cpu_graphs.html')
 
 @app.route('/storage', methods=['GET', 'POST'])
 def storage_page():
-    dict=storage_csv_reader.to_dict()
-    labels = dict['labels']
+    dict=new_storage_csv_reader.to_dict()
+    names = dict['name']
     price = dict['price']
-    return render_template('storage_page.html', labels=labels, price=price)
+    date = dict['date']
+    return render_template('storage_page.html', names=names, price=price, date=date)
 
 @app.route('/storagegraphs', methods=['GET', 'POST'])
 def storage_graphs():
-    """Render the Storage page."""
+    """Render the Storage graphs."""
     return render_template('storage_graphs.html')
 
 @app.route('/motherboard', methods=['GET', 'POST'])
