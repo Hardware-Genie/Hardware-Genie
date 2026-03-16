@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block main %}
+<head>
+    <meta charset="UTF-8">
+    <title>Search Results - PC Part Tracker</title>
+</head>
+<body>
+    <nav>
+        <div class="header_block">    
+            <h1>Hardware Genie</h1>
+        </div>
+    </nav>
+<div class="search-results-container">
+    <div style="margin-bottom: 30px;">
+        <form action="/search" method="GET">
+            <input type="text" name="q" value="{{ query }}" placeholder="Search hardware..." style="padding: 10px; width: 300px;">
+            <button type="submit" style="padding: 10px;">Search</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <!-- Sidebar Filters -->
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form action="/search" method="GET" id="filterForm">
+                <div class="filter-group">
+                    <label>Category</label>
+                    <select name="category" onchange="this.form.submit()">
+                        <option value="">All Categories</option>
+                        {# Hardcoded list of your tables #}
+                        {% set categories = [
+                            ('video_card', 'Video Card'),
+                            ('cpu', 'CPU'),
+                            ('power_supply', 'Power Supply'),
+                            ('motherboard', 'Motherboard'),
+                            ('memory', 'Memory'),
+                            ('internal_hard_drive', 'Internal Hard Drive')
+                        ] %}
+                        {% for val, label in categories %}
+                            <option value="{{ val }}" {% if active_filters.get('category') == val %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- 1. ALWAYS include the main search query -->
+                <input type="hidden" name="q" value="{{ query }}">
+                
+                <!-- 2. Create the dropdowns -->
+                {% for spec_name, options in filter_options.items() %}
+                    <div class="filter-group">
+                        <label>{{ spec_name.replace('_', ' ') }}</label>
+                        
+                        <select name="{{ spec_name }}" onchange="this.form.submit()">
+                            <option value="">All</option>
+                            {% for opt in options %}
+                                {# Compare as strings to ensure 'selected' works #}
+                                <option value="{{ opt }}" {% if active_filters.get(spec_name)|string == opt|string %}selected{% endif %}>
+                                    {{ opt }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <!-- 3. CRITICAL: Hidden inputs for OTHER active filters -->
+                        {# This carries over your other selections when you change THIS dropdown #}
+                        {% for other_key, other_val in active_filters.items() %}
+                            {% if other_key != spec_name and other_key != 'q' %}
+                                <input type="hidden" name="{{ other_key }}" value="{{ other_val }}">
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+
+                <a href="{{ url_for('search', q=query) }}" class="reset-btn">Clear All Filters</a>
+            </form>
+        </aside>
+
+        <!-- Results Table -->
+        <main class="main-content">
+            <h2>Results for "{{ query }}"</h2>
+            {% if results %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item Name</th>
+                            <th>Specifications</th>
+                            <th>Latest Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in results %}
+                        {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
+                        
+                        <tr class="clickable-row" data-href="{{ history_url }}">
+                            <td><strong>{{ item.type_label }}</strong></td>
+                            <td>
+                                <a href="{{ history_url }}">{{ item.name }}</a>
+                            </td>
+                            <td>
+                                {% for key, value in item.items() %}
+                                    {% set ignored = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb'] %}
+                                    {% if key.lower() not in ignored and value %}
+                                        <span class="spec-tag"><strong>{{ key.replace('_', ' ') }}:</strong> {{ value }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No components found matching your search and filters.</p>
+            {% endif %}
+        </main>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const rows = document.querySelectorAll(".clickable-row");
+    rows.forEach(row => {
+        row.addEventListener("click", (e) => {
+            // Don't trigger if the user clicked the link directly or a button
+            if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON') {
+                window.location.href = row.dataset.href;
+            }
+        });
+    });
+});
+</script>
+</body>
+{% endblock %}

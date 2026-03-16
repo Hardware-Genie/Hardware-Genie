@@ -3,6 +3,10 @@
 <nav>
 <div class="header_block">    
     <h1>Hardware Genie</h1>
+    <form action="/search" method="GET">
+        <input type="text" name="q" placeholder="Search for CPUs, GPUs, etc..." required>
+        <button type="submit">Search</button>
+    </form>
 </div>
 </nav>
 <div class="main_block">
@@ -21,8 +25,8 @@
             <td><a href="{{ url_for('storage_page') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('storage_page') }}"><br>Storage</a></td>
         </tr>
          <tr>
-            <td><a href="{{ url_for('motherboard_graphs') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a></td>
-            <td><a href="{{ url_for('powersupply_graphs') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a></td>
+            <td><a href="{{ url_for('motherboard_page') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a></td>
+            <td><a href="{{ url_for('powersupply_page') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a></td>
         </tr>
     </table>
 </div>
