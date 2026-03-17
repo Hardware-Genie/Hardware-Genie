@@ -27,6 +27,11 @@ PRODUCTS = [
     {
         "name": "RTX 3080 EVGA FTW3",
         "url": "https://www.newegg.com/evga-geforce-rtx-3080-10g-p5-3897-kr/p/N82E16814487518",
+        
+    },
+    {
+        "name": "ASRock Challenger RX 9070 XT CL 16G",
+        "url": "https://www.newegg.com/asrock-challenger-rx9070xt-cl-16g-radeon-rx-9070-xt-16gb-graphics-card-triple-fans/p/N82E16814930145",
 
     }
     # {
@@ -74,8 +79,30 @@ class WaybackNeweggSpider(scrapy.Spider):
 
         if product_name and product_url:
             self.products = [{"name": product_name, "url": product_url}]
+            self.category = self._determine_category(product_name)
         else:
             self.products = PRODUCTS
+            # For multiple products, use a default or determine per product
+            self.category = "other"
+
+    def _determine_category(self, product_name):
+        """Determine product category from name."""
+        name = product_name.lower()
+        
+        if any(x in name for x in ['rtx', 'gtx', 'radeon', 'graphics card', 'gpu', 'video card']):
+            return 'video-card'
+        elif any(x in name for x in ['core i', 'ryzen', 'cpu', 'processor']):
+            return 'cpu'
+        elif any(x in name for x in ['ram', 'ddr', 'memory']):
+            return 'memory'
+        elif any(x in name for x in ['hdd', 'ssd', 'storage', 'drive', 'internal hard drive']):
+            return 'internal-hard-drive'
+        elif 'motherboard' in name:
+            return 'motherboard'
+        elif any(x in name for x in ['power supply', 'psu']):
+            return 'power-supply'
+        else:
+            return 'other'
 
     def start_requests(self):
         """

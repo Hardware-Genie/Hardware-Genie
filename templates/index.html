@@ -3,6 +3,10 @@
 <nav>
 <div class="header_block">    
     <h1>Hardware Genie</h1>
+    <form action="/search" method="GET">
+        <input type="text" name="q" placeholder="Search for CPUs, GPUs, etc..." required>
+        <button type="submit">Search</button>
+    </form>
 </div>
 </nav>
 <div class="main_block">
@@ -13,17 +17,27 @@
     </div>
     <table class="center">
         <tr>
-            <td><a href="{{ url_for('memory_graphs') }}"><image src="{{ url_for('static', filename='images/memory.jpg') }}" alt="Memory"></a></td>
-            <td><a href="{{ url_for('gpu_graphs') }}"><image src="{{ url_for('static', filename='images/gpu.jpg') }}" alt="GPU"></a></td>
+            <td><a href="{{ url_for('memory_page') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('memory_page') }}"><br>Memory</a></td>
+            <td><a href="{{ url_for('gpu_page') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('gpu_page') }}"><br>GPU</a></td>
         </tr>
         <tr>
-            <td><a href="{{ url_for('cpu_graphs') }}"><image src="{{ url_for('static', filename='images/cpu.jpg') }}" alt="CPU"></a></td>
-            <td><a href="{{ url_for('storage_graphs') }}"><image src="{{ url_for('static', filename='images/storage.jpg') }}" alt="Storage"></a></td>
+            <td><a href="{{ url_for('cpu_page') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('cpu_page') }}"><br>CPU</a></td>
+            <td><a href="{{ url_for('storage_page') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('storage_page') }}"><br>Storage</a></td>
         </tr>
          <tr>
-            <td><a href="{{ url_for('motherboard_graphs') }}"><image src="{{ url_for('static', filename='images/motherboard.jpg') }}" alt="Motherboard"></a></td>
-            <td><a href="{{ url_for('powersupply_graphs') }}"><image src="{{ url_for('static', filename='images/powersupply.jpg') }}" alt="Power Supply"></a></td>
+            <td><a href="{{ url_for('motherboard_page') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a></td>
+            <td><a href="{{ url_for('powersupply_page') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a></td>
         </tr>
     </table>
 </div>
+<p><br><br><br><br><br><br><br><br><br><br><br><br><br><br></p>   
+<div class="center">
+    <h2>Scrape for a Part</h2>
+    <form action="{{ url_for('scraper') }}" method="post">
+        <button type="submit">Go to Scraper</button>
+    </form>
+</div>
+<footer>
+    <p>&copy; 2026 Hardware Genie.</p>
+</footer>
 {% endblock %}
