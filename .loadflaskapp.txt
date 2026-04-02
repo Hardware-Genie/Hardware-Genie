@@ -2,3 +2,11 @@ python3 -m venv .venv
 .\.venv\Scripts\activate
 $env:FLASK_APP="src/app"
 flask run --debug
+
+# Install requirements to your virtual environment
+pip install -r requirements.txt
+
+
+
+#use for freezing your packages to the requirements
+pip freeze -l > requirements.txt
