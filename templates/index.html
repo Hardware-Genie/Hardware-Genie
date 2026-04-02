@@ -3,10 +3,11 @@
 <nav>
 <div class="header_block">    
     <h1>Hardware Genie</h1>
-    <form action="/search" method="GET">
-        <input type="text" name="q" placeholder="Search for CPUs, GPUs, etc..." required>
-        <button type="submit">Search</button>
-    </form>
+    <div class="header_tabs" aria-label="Main navigation tabs">
+        <a class="header_tab" href="{{ url_for('products') }}">Products</a>
+        <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
+        <a class="header_tab" href="{{ url_for('scraper') }}">Build</a>
+    </div>
 </div>
 </nav>
 <div class="main_block">
@@ -17,26 +18,54 @@
     </div>
     <table class="center">
         <tr>
-            <td><a href="{{ url_for('memory_page') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('memory_page') }}"><br>Memory</a></td>
-            <td><a href="{{ url_for('gpu_page') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('gpu_page') }}"><br>GPU</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='memory') }}" tabindex="0"><a href="{{ url_for('products', category='memory') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('products', category='memory') }}"><br>Memory</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='video_card') }}" tabindex="0"><a href="{{ url_for('products', category='video_card') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('products', category='video_card') }}"><br>GPU</a></td>
         </tr>
         <tr>
-            <td><a href="{{ url_for('cpu_page') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('cpu_page') }}"><br>CPU</a></td>
-            <td><a href="{{ url_for('storage_page') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('storage_page') }}"><br>Storage</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='cpu') }}" tabindex="0"><a href="{{ url_for('products', category='cpu') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('products', category='cpu') }}"><br>CPU</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='internal_hard_drive') }}" tabindex="0"><a href="{{ url_for('products', category='internal_hard_drive') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('products', category='internal_hard_drive') }}"><br>Storage</a></td>
         </tr>
          <tr>
-            <td><a href="{{ url_for('motherboard_page') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a></td>
-            <td><a href="{{ url_for('powersupply_page') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='motherboard') }}" tabindex="0"><a href="{{ url_for('products', category='motherboard') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a><a href="{{ url_for('products', category='motherboard') }}"><br>Motherboard</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='power_supply') }}" tabindex="0"><a href="{{ url_for('products', category='power_supply') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a><a href="{{ url_for('products', category='power_supply') }}"><br>Power Supply</a></td>
         </tr>
     </table>
 </div>
 <p><br><br><br><br><br><br><br><br><br><br><br><br><br><br></p>   
 <div class="center">
     <h2>Scrape for a Part</h2>
+</div>
+<div class="center">
     <form action="{{ url_for('scraper') }}" method="post">
         <button type="submit">Go to Scraper</button>
     </form>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const categoryCells = document.querySelectorAll(".category-cell");
+
+    categoryCells.forEach((cell) => {
+        const targetUrl = cell.dataset.href;
+        if (!targetUrl) {
+            return;
+        }
+
+        cell.addEventListener("click", (event) => {
+            if (event.target.closest("a")) {
+                return;
+            }
+            window.location.href = targetUrl;
+        });
+
+        cell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                window.location.href = targetUrl;
+            }
+        });
+    });
+});
+</script>
 <footer>
     <p>&copy; 2026 Hardware Genie.</p>
 </footer>

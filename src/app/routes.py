@@ -233,6 +233,8 @@ def scraper_status(task_id):
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
     active_filters = {k: v for k, v in request.args.items() if k not in ['q', 'page'] and v}
     selected_category = active_filters.get('category')
     if selected_category:
@@ -245,67 +247,88 @@ def search():
     filter_options = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
-    ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params']
+    ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'microarchitecture']
 
-    if query:
-        for table_name in tables_to_search:
-            inst = inspect(db.engine)
-            columns = [c['name'] for c in inst.get_columns(table_name)]
-            
-            # --- FIX: Define these ONCE per table loop ---
-            where_parts = ["name LIKE :q"]
-            params = {"q": f"%{query}%"}
+    for table_name in tables_to_search:
+        inst = inspect(db.engine)
+        columns = [c['name'] for c in inst.get_columns(table_name)]
+        
+        where_parts = []
+        params = {}
 
-            for key, val in active_filters.items():
-                if key in columns:
-                    # If the column exists, apply the filter
-                    where_parts.append(f"REPLACE(LOWER(CAST({key} AS TEXT)), ' ', '') = :{key}_val")
-                    params[f"{key}_val"] = val.replace(" ", "").lower()
-                else:
-                    # If the column doesn't exist in THIS table (e.g., 'speed' in 'video_card'),
-                    # we skip it so the table still shows its basic search results.
-                    pass 
+        if query:
+            where_parts.append("name LIKE :q")
+            params["q"] = f"%{query}%"
+
+        for key, val in active_filters.items():
+            if key == 'category':
+                continue
+
+            if key in columns:
+                where_parts.append(f"REPLACE(LOWER(CAST({key} AS TEXT)), ' ', '') = :{key}_val")
+                params[f"{key}_val"] = val.replace(" ", "").lower()
+        
+        # 2. Define identifying columns and grouping logic
+        group_cols = [c for c in columns if c.lower() not in ignored_cols]
+        norm_group_by = ", ".join([f"REPLACE(LOWER(CAST({c} AS TEXT)), ' ', '')" for c in group_cols])
+        
+        # 3. Build the final SQL (show all rows if no query/filter constraints)
+        where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+        sql = text(f"SELECT * FROM {table_name} WHERE {where_clause} GROUP BY {norm_group_by}")
+        
+        # 4. Execute and Process
+        results = db.session.execute(sql, params).mappings().all()
+        for row in results:
+            item = dict(row)
+            item['table_name'] = table_name
+            item['type_label'] = table_name.replace('_', ' ').title()
+            item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
+            all_results.append(item)
             
-            # 2. Define identifying columns and grouping logic
-            group_cols = [c for c in columns if c.lower() not in ignored_cols]
-            norm_group_by = ", ".join([f"REPLACE(LOWER(CAST({c} AS TEXT)), ' ', '')" for c in group_cols])
-            
-            sql_filters = {k: v for k, v in active_filters.items() if k != 'category'}
-            
-            # 3. Build the final SQL (No more resetting here!)
-            where_clause = " AND ".join(where_parts)
-            sql = text(f"SELECT * FROM {table_name} WHERE {where_clause} GROUP BY {norm_group_by}")
-            
-            # 4. Execute and Process
-            results = db.session.execute(sql, params).mappings().all()
-            for row in results:
-                item = dict(row)
-                item['table_name'] = table_name
-                item['type_label'] = table_name.replace('_', ' ').title()
-                item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
-                all_results.append(item)
-                
-                # 5. Populate dropdowns ONLY from the filtered results
-                for key, val in item.items():
-                    if key not in ignored_cols and key != 'name' and val:
-                        if key not in filter_options:
-                            filter_options[key] = set()
-                        filter_options[key].add(str(val))
+            # 5. Populate dropdowns from the currently returned results
+            for key, val in item.items():
+                if key not in ignored_cols and key != 'name' and val:
+                    if key not in filter_options:
+                        filter_options[key] = set()
+                    filter_options[key].add(str(val))
 
     sorted_filters = {k: sorted(list(v)) for k, v in filter_options.items()}
+
+    total_results = len(all_results)
+    total_pages = max(1, (total_results + per_page - 1) // per_page)
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_results = all_results[start_idx:end_idx]
+    start_item = start_idx + 1 if total_results > 0 else 0
+    end_item = min(end_idx, total_results)
     
-    return render_template('search_results.html', 
-                           results=all_results, 
+    return render_template('products.html', 
+                           results=paginated_results,
                            query=query, 
                            filter_options=sorted_filters, 
-                           active_filters=active_filters)
+                           active_filters=active_filters,
+                           page=page,
+                           total_pages=total_pages,
+                           total_results=total_results,
+                           start_item=start_item,
+                           end_item=end_item)
+
+
+@app.route('/products')
+def products():
+    return search()
 
 
 @app.route('/history')
 def item_history():
     table_type = request.args.get('table_type')
 
-    ignored = ['table_type', 'price_per_gb', 'price/gb']
+    ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt']
     filters = {k: v for k, v in request.args.items() if k not in ignored and v != 'None'}
     
     # Build a normalized WHERE clause

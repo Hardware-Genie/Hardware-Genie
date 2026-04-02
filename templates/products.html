@@ -2,7 +2,7 @@
 {% block main %}
 <head>
     <meta charset="UTF-8">
-    <title>Search Results - PC Part Tracker</title>
+    <title>Products - Hardware Genie</title>
 </head>
 <body>
     <nav>
@@ -11,10 +11,11 @@
         </div>
     </nav>
 <div class="search-results-container">
-    <div style="margin-bottom: 30px;">
-        <form action="/search" method="GET">
-            <input type="text" name="q" value="{{ query }}" placeholder="Search hardware..." style="padding: 10px; width: 300px;">
-            <button type="submit" style="padding: 10px;">Search</button>
+    <div class="search-toolbar">
+        <a class="back-button" href="{{ url_for('index') }}">← Back</a>
+        <form action="{{ url_for('products') }}" method="GET">
+            <input class="search-input" type="text" name="q" value="{{ query }}" placeholder="Search hardware...">
+            <button class="search-button" type="submit">Search</button>
         </form>
     </div>
 
@@ -22,7 +23,7 @@
         <!-- Sidebar Filters -->
         <aside class="sidebar">
             <h3>Filters</h3>
-            <form action="/search" method="GET" id="filterForm">
+            <form action="{{ url_for('products') }}" method="GET" id="filterForm">
                 <div class="filter-group">
                     <label>Category</label>
                     <select name="category" onchange="this.form.submit()">
@@ -71,13 +72,42 @@
                     </div>
                 {% endfor %}
 
-                <a href="{{ url_for('search', q=query) }}" class="reset-btn">Clear All Filters</a>
+                <a href="{{ url_for('products', q=query) }}" class="reset-btn">Clear All Filters</a>
             </form>
         </aside>
 
         <!-- Results Table -->
         <main class="main-content">
-            <h2>Results for "{{ query }}"</h2>
+            {% set start_page = [1, page - 2] | max %}
+            {% set end_page = [total_pages, start_page + 4] | min %}
+            {% set start_page = [1, end_page - 4] | max %}
+            {% if query %}
+                <h2>Results for "{{ query }}"</h2>
+            {% else %}
+                <h2>All Products</h2>
+            {% endif %}
+            <p class="results-count">Showing {{ start_item }}-{{ end_item }} of {{ total_results }} products.</p>
+
+            {% if total_pages > 1 %}
+                <div class="pager">
+                    {% if page > 1 %}
+                        <a href="{{ url_for('products', q=query, page=page-1, **active_filters) }}">Previous 50</a>
+                    {% endif %}
+
+                    {% for p in range(start_page, end_page + 1) %}
+                        {% if p == page %}
+                            <span class="current-page">{{ p }}</span>
+                        {% else %}
+                            <a href="{{ url_for('products', q=query, page=p, **active_filters) }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                        <a href="{{ url_for('products', q=query, page=page+1, **active_filters) }}">Next 50</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             {% if results %}
                 <table>
                     <thead>
@@ -110,6 +140,26 @@
                         {% endfor %}
                     </tbody>
                 </table>
+
+                {% if total_pages > 1 %}
+                    <div class="pager">
+                        {% if page > 1 %}
+                            <a href="{{ url_for('products', q=query, page=page-1, **active_filters) }}">Previous 50</a>
+                        {% endif %}
+
+                        {% for p in range(start_page, end_page + 1) %}
+                            {% if p == page %}
+                                <span class="current-page">{{ p }}</span>
+                            {% else %}
+                                <a href="{{ url_for('products', q=query, page=p, **active_filters) }}">{{ p }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page < total_pages %}
+                            <a href="{{ url_for('products', q=query, page=page+1, **active_filters) }}">Next 50</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
             {% else %}
                 <p>No components found matching your search and filters.</p>
             {% endif %}

@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <a href="javascript:history.back()">← Back</a>
+    <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
     <h1>Price History: {{ name }}</h1>
     <h1>{{ specs.name }}</h1>
     <div class="specs-banner">
@@ -25,6 +25,7 @@
     <hr>
 
     <!-- 2. The Table -->
+    <p>Price history for {{ name }}:</p>
     <table border="1">
         <thead>
             <tr><th>Date</th><th>Price</th></tr>
