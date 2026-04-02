@@ -1,3 +1,25 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import re
+
+# Load the CSV and drop any nonexistent values
+df = pd.read_csv("combined_memory.csv")
+df = df.dropna()
+
+# Function to extract the RAM size
+def get_ram_size(name):
+    match = re.search(r'(\d+)\s\s*GB', name)
+    return int(match.group(1)) if match else None
+
+# Create a new column with RAM size
+df["ram_gb"] = df["name"].apply(get_ram_size)
+
+# Create separate lists for each unique RAM amount
+ram_lists = {
+    size: group
+    for size, group in df.groupby("ram_gb")
+}
+
 def analyze_ram_groups_hist(groups):
     results = {}
 
@@ -21,11 +43,5 @@ def analyze_ram_groups_hist(groups):
 
         # Store full DataFrame with new columns
         results[capacity] = df
-
-        print(df['deal_quality'])
-        
-        plt.hist(df['value'], bins = 20, edgecolor = 'black')
-        plt.title(capacity)
-        plt.show()
 
     return results
