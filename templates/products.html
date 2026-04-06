@@ -7,7 +7,33 @@
 <body>
     <nav>
         <div class="header_block">    
-            <h1>Hardware Genie</h1>
+            <div class="header_top">
+                <h1>Hardware Genie</h1>
+            </div>
+            <div class="header_buttons">
+                {% if current_user.is_authenticated %}
+                    <p>Current User: {{ current_user.username }}</p>
+                    <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+                {% else %}
+                    <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+                    <a class="header_button" href="{{ url_for('login') }}">Login</a>
+                {% endif %}
+            </div>
+            <div class="header_tabs" aria-label="Main navigation tabs">
+                <details class="nav_dropdown">
+                    <summary class="header_tab header_tab--dropdown">Products</summary>
+                    <div class="nav_dropdown_menu" aria-label="Product categories">
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+                    </div>
+                </details>
+                <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
+                <a class="header_tab" href="{{ url_for('scraper') }}">Build</a>
+            </div>
         </div>
     </nav>
 <div class="search-results-container">
@@ -24,55 +50,54 @@
         <aside class="sidebar">
             <h3>Filters</h3>
             <form action="{{ url_for('products') }}" method="GET" id="filterForm">
-                <div class="filter-group">
-                    <label>Category</label>
-                    <select name="category" onchange="this.form.submit()">
-                        <option value="">All Categories</option>
-                        {# Hardcoded list of your tables #}
-                        {% set categories = [
-                            ('video_card', 'Video Card'),
-                            ('cpu', 'CPU'),
-                            ('power_supply', 'Power Supply'),
-                            ('motherboard', 'Motherboard'),
-                            ('memory', 'Memory'),
-                            ('internal_hard_drive', 'Internal Hard Drive')
-                        ] %}
-                        {% for val, label in categories %}
-                            <option value="{{ val }}" {% if active_filters.get('category') == val %}selected{% endif %}>
-                                {{ label }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <!-- 1. ALWAYS include the main search query -->
                 <input type="hidden" name="q" value="{{ query }}">
                 
-                <!-- 2. Create the dropdowns -->
-                {% for spec_name, options in filter_options.items() %}
-                    <div class="filter-group">
-                        <label>{{ spec_name.replace('_', ' ') }}</label>
-                        
-                        <select name="{{ spec_name }}" onchange="this.form.submit()">
-                            <option value="">All</option>
-                            {% for opt in options %}
-                                {# Compare as strings to ensure 'selected' works #}
-                                <option value="{{ opt }}" {% if active_filters.get(spec_name)|string == opt|string %}selected{% endif %}>
-                                    {{ opt }}
-                                </option>
+                <!-- Category Filter -->
+                <div class="filter-section">
+                    <details class="filter-collapsible" open>
+                        <summary class="filter-header">Category</summary>
+                        <div class="filter-options">
+                            {% set categories = [
+                                ('video_card', 'Video Card'),
+                                ('cpu', 'CPU'),
+                                ('power_supply', 'Power Supply'),
+                                ('motherboard', 'Motherboard'),
+                                ('memory', 'Memory'),
+                                ('internal_hard_drive', 'Internal Hard Drive')
+                            ] %}
+                            {% for val, label in categories %}
+                                <label class="filter-checkbox">
+                                    <input type="radio" name="category" value="{{ val }}" {% if active_filters.get('category') == val %}checked{% endif %}>
+                                    {{ label }}
+                                </label>
                             {% endfor %}
-                        </select>
-
-                        <!-- 3. CRITICAL: Hidden inputs for OTHER active filters -->
-                        {# This carries over your other selections when you change THIS dropdown #}
-                        {% for other_key, other_val in active_filters.items() %}
-                            {% if other_key != spec_name and other_key != 'q' %}
-                                <input type="hidden" name="{{ other_key }}" value="{{ other_val }}">
-                            {% endif %}
-                        {% endfor %}
+                        </div>
+                    </details>
+                </div>
+                
+                <!-- Other Filters -->
+                {% for spec_name, options in filter_options.items() %}
+                    <div class="filter-section">
+                        <details class="filter-collapsible">
+                            <summary class="filter-header">{{ spec_name.replace('_', ' ').title() }}</summary>
+                            <div class="filter-options">
+                                {% for opt in options %}
+                                    <label class="filter-checkbox">
+                                        <input type="checkbox" name="{{ spec_name }}" value="{{ opt }}" 
+                                            {% if spec_name in all_active_filters and opt in all_active_filters[spec_name] %}checked{% endif %}>
+                                        {{ opt }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </details>
                     </div>
                 {% endfor %}
-
-                <a href="{{ url_for('products', q=query) }}" class="reset-btn">Clear All Filters</a>
+                
+                <!-- Action Buttons -->
+                <div class="filter-actions">
+                    <button type="submit" class="apply-filters-btn">Apply Filters</button>
+                    <a href="{{ url_for('products', q=query) }}" class="reset-btn">Clear All</a>
+                </div>
             </form>
         </aside>
 
@@ -87,23 +112,33 @@
                 <h2>All Products</h2>
             {% endif %}
             <p class="results-count">Showing {{ start_item }}-{{ end_item }} of {{ total_results }} products.</p>
+            
+            <!-- Sorting Control -->
+            <div class="sort-control">
+                <label for="sortSelect">Sort by:</label>
+                <select id="sortSelect" name="sort" onchange="updateSort(this.value)">
+                    <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance</option>
+                    <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price: Low to High</option>
+                    <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                </select>
+            </div>
 
             {% if total_pages > 1 %}
                 <div class="pager">
                     {% if page > 1 %}
-                        <a href="{{ url_for('products', q=query, page=page-1, **active_filters) }}">Previous 50</a>
+                        <a href="{{ url_for('products', q=query, page=page-1, sort=sort_by, **active_filters) }}">Previous 50</a>
                     {% endif %}
 
                     {% for p in range(start_page, end_page + 1) %}
                         {% if p == page %}
                             <span class="current-page">{{ p }}</span>
                         {% else %}
-                            <a href="{{ url_for('products', q=query, page=p, **active_filters) }}">{{ p }}</a>
+                            <a href="{{ url_for('products', q=query, page=p, sort=sort_by, **active_filters) }}">{{ p }}</a>
                         {% endif %}
                     {% endfor %}
 
                     {% if page < total_pages %}
-                        <a href="{{ url_for('products', q=query, page=page+1, **active_filters) }}">Next 50</a>
+                        <a href="{{ url_for('products', q=query, page=page+1, sort=sort_by, **active_filters) }}">Next 50</a>
                     {% endif %}
                 </div>
             {% endif %}
@@ -144,19 +179,19 @@
                 {% if total_pages > 1 %}
                     <div class="pager">
                         {% if page > 1 %}
-                            <a href="{{ url_for('products', q=query, page=page-1, **active_filters) }}">Previous 50</a>
+                            <a href="{{ url_for('products', q=query, page=page-1, sort=sort_by, **active_filters) }}">Previous 50</a>
                         {% endif %}
 
                         {% for p in range(start_page, end_page + 1) %}
                             {% if p == page %}
                                 <span class="current-page">{{ p }}</span>
                             {% else %}
-                                <a href="{{ url_for('products', q=query, page=p, **active_filters) }}">{{ p }}</a>
+                                <a href="{{ url_for('products', q=query, page=p, sort=sort_by, **active_filters) }}">{{ p }}</a>
                             {% endif %}
                         {% endfor %}
 
                         {% if page < total_pages %}
-                            <a href="{{ url_for('products', q=query, page=page+1, **active_filters) }}">Next 50</a>
+                            <a href="{{ url_for('products', q=query, page=page+1, sort=sort_by, **active_filters) }}">Next 50</a>
                         {% endif %}
                     </div>
                 {% endif %}
@@ -167,16 +202,61 @@
     </div>
 </div>
 <script>
+function updateSort(sortValue) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('sort', sortValue);
+    params.set('page', '1');
+    window.location.href = '?' + params.toString();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const rows = document.querySelectorAll(".clickable-row");
     rows.forEach(row => {
         row.addEventListener("click", (e) => {
-            // Don't trigger if the user clicked the link directly or a button
-            if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON') {
+            if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
                 window.location.href = row.dataset.href;
             }
         });
     });
+    
+    // Handle multiselect checkbox serialization
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // Get all checkbox and radio values grouped by name
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams();
+            
+            // Add query and preserve sort parameter
+            const currentParams = new URLSearchParams(window.location.search);
+            if (currentParams.has('q')) {
+                params.append('q', currentParams.get('q'));
+            }
+            if (currentParams.has('sort')) {
+                params.append('sort', currentParams.get('sort'));
+            }
+            
+            // Collect all values by field name
+            const fieldValues = {};
+            for (const [name, value] of formData.entries()) {
+                if (!fieldValues[name]) {
+                    fieldValues[name] = [];
+                }
+                fieldValues[name].push(value);
+            }
+            
+            // Add to params as comma-separated values
+            for (const [name, values] of Object.entries(fieldValues)) {
+                if (values.length > 0 && values[0] !== '') {
+                    params.append(name, values.join(','));
+                }
+            }
+            
+            window.location.href = window.location.pathname + '?' + params.toString();
+        });
+    }
 });
 </script>
 </body>

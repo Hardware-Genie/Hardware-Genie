@@ -1,4 +1,6 @@
 
+from logging import exception
+
 from flask import Flask, render_template, jsonify, redirect, url_for, request
 from sqlalchemy import inspect, text
 from app import app
@@ -7,11 +9,14 @@ import os
 import pandas as pd
 import json
 
-from app.forms import WebsiteToScrape
+from app.forms import LoginForm, SignupForm, WebsiteToScrape
+from app.models import User
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
 from app import tasks
 import scrapy
+import bcrypt
+from flask_login import login_user, logout_user, login_required, current_user, login_manager
 from scrapy.crawler import CrawlerProcess
 
 from app.forms import WebsiteToScrape
@@ -20,6 +25,9 @@ from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg impo
 from app import tasks
 import scrapy
 from scrapy.crawler import CrawlerProcess
+
+from part_memory_analysis import ram_analysis
+
 
 
 # py partpicker, an api for getting data from pc partpicker, trying this out 
@@ -147,6 +155,62 @@ def index():
     """Render the main index page."""
     return render_template('index.html')
 
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    form = SignupForm()
+    if form.validate_on_submit():
+        if form.password.data == form.confirm_password.data:
+            hashed = bcrypt.hashpw((form.password.data).encode('utf-8'), bcrypt.gensalt())
+            newUser = User(email=form.email.data,username=form.username.data, password_hash=hashed)
+            db.session.add(newUser)
+            # don't commit if there is another user with the same id, or any other error that occurs with the commit
+            try:
+                db.session.commit()
+                print("User created successfully")
+            except:
+                return render_template('signup.html',form=form, same_email=1)
+            return redirect(url_for('index'))
+        else:
+            # if the passwords in the sinup dont match return to form with same data but give a message that says passwords dont match
+            return render_template('signup.html', form=form, miss_match=1)
+    return render_template('signup.html', form=form, same_email=0, miss_match=0, form_errors=form.errors)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        #Try to find user
+        try:
+            user = db.session.execute(db.select(User).filter(User.email==form.email.data)).scalar_one_or_none()
+        except:
+            # if the id doesnt exist give user message
+            return render_template('login.html', wrong_email=1, form=form)
+        #    
+        #Authenticate user
+        
+        try:
+            if bcrypt.checkpw((form.password.data).encode('utf-8'), user.password_hash):
+                login_user(user)
+                print("User logged in successfully")
+                return redirect(url_for('index'))
+            else:
+                # if the password is wrong take to other page to say wrong password
+                print("Wrong password")
+                return render_template('login.html', wrong_pass=1, form=form)
+        except Exception as e:
+            print(f"Error during login: {e}")
+            return render_template('login.html', wrong_email=1, form=form)
+        print("Error during login")
+    print(form.errors)
+    return render_template('login.html', form=form, wrong_email=0, wrong_pass=0, form_errors=form.errors)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
 @app.route('/scraper', methods=['GET', 'POST'])
 def scraper():
     form = WebsiteToScrape()
@@ -234,17 +298,18 @@ def scraper_status(task_id):
 def search():
     query = request.args.get('q', '')
     page = request.args.get('page', 1, type=int)
+    sort_by = request.args.get('sort', 'relevance')
     per_page = 50
-    active_filters = {k: v for k, v in request.args.items() if k not in ['q', 'page'] and v}
-    selected_category = active_filters.get('category')
+    active_filters = {k: v.split(',') if ',' in v else [v] for k, v in request.args.items() if k not in ['q', 'page', 'sort'] and v}
+    selected_category = active_filters.get('category', [None])[0] if 'category' in active_filters else None
     if selected_category:
         tables_to_search = [selected_category]
     else:
         tables_to_search = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
 
-
     all_results = []
     filter_options = {}
+    price_range = {'min': float('inf'), 'max': 0}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
     ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'microarchitecture']
@@ -260,19 +325,21 @@ def search():
             where_parts.append("name LIKE :q")
             params["q"] = f"%{query}%"
 
-        for key, val in active_filters.items():
+        for key, val_list in active_filters.items():
             if key == 'category':
                 continue
-
-            if key in columns:
-                where_parts.append(f"REPLACE(LOWER(CAST({key} AS TEXT)), ' ', '') = :{key}_val")
-                params[f"{key}_val"] = val.replace(" ", "").lower()
+            if key in columns and val_list:
+                normalized_vals = [v.replace(" ", "").lower() for v in val_list]
+                or_parts = [f"REPLACE(LOWER(CAST({key} AS TEXT)), ' ', '') = :{key}_val_{i}" for i in range(len(normalized_vals))]
+                where_parts.append("(" + " OR ".join(or_parts) + ")")
+                for i, nval in enumerate(normalized_vals):
+                    params[f"{key}_val_{i}"] = nval
         
         # 2. Define identifying columns and grouping logic
         group_cols = [c for c in columns if c.lower() not in ignored_cols]
         norm_group_by = ", ".join([f"REPLACE(LOWER(CAST({c} AS TEXT)), ' ', '')" for c in group_cols])
         
-        # 3. Build the final SQL (show all rows if no query/filter constraints)
+        # 3. Build the final SQL
         where_clause = " AND ".join(where_parts) if where_parts else "1=1"
         sql = text(f"SELECT * FROM {table_name} WHERE {where_clause} GROUP BY {norm_group_by}")
         
@@ -285,14 +352,41 @@ def search():
             item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
             all_results.append(item)
             
-            # 5. Populate dropdowns from the currently returned results
+            # Track price range
+            try:
+                price = float(str(item.get('price', 0)).replace('$', '').replace(',', ''))
+                price_range['min'] = min(price_range['min'], price)
+                price_range['max'] = max(price_range['max'], price)
+            except:
+                pass
+            
+            # 5. Populate filter options with normalized values (strip spaces)
             for key, val in item.items():
                 if key not in ignored_cols and key != 'name' and val:
+                    normalized_val = str(val).strip()
                     if key not in filter_options:
                         filter_options[key] = set()
-                    filter_options[key].add(str(val))
+                    filter_options[key].add(normalized_val)
 
-    sorted_filters = {k: sorted(list(v)) for k, v in filter_options.items()}
+    # Categorize filters: numeric vs text
+    numeric_filters = set()
+    text_filters = {}
+    for key, vals in filter_options.items():
+        try:
+            if all(str(v).replace('.', '').replace(',', '').replace('-', '').isdigit() for v in vals if v):
+                numeric_filters.add(key)
+        except:
+            pass
+        if key not in numeric_filters:
+            text_filters[key] = sorted(list(vals))
+
+    sorted_filters = {k: sorted(list(v)) for k, v in filter_options.items() if k not in numeric_filters}
+    
+    # Apply sorting
+    if sort_by == 'price_low':
+        all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0))
+    elif sort_by == 'price_high':
+        all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0), reverse=True)
 
     total_results = len(all_results)
     total_pages = max(1, (total_results + per_page - 1) // per_page)
@@ -307,16 +401,28 @@ def search():
     start_item = start_idx + 1 if total_results > 0 else 0
     end_item = min(end_idx, total_results)
     
+    # Flatten active_filters back to original format for template
+    flat_active_filters = {}
+    for k, v_list in active_filters.items():
+        if v_list:
+            flat_active_filters[k] = v_list[0] if len(v_list) == 1 else ','.join(v_list)
+    
+    if price_range['min'] == float('inf'):
+        price_range['min'] = 0
+    
     return render_template('products.html', 
                            results=paginated_results,
                            query=query, 
                            filter_options=sorted_filters, 
-                           active_filters=active_filters,
+                           active_filters=flat_active_filters,
+                           all_active_filters=active_filters,
+                           sort_by=sort_by,
                            page=page,
                            total_pages=total_pages,
                            total_results=total_results,
                            start_item=start_item,
-                           end_item=end_item)
+                           end_item=end_item,
+                           price_range=price_range)
 
 
 @app.route('/products')

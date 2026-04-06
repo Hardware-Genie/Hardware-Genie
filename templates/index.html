@@ -2,9 +2,30 @@
 {% block main %}
 <nav>
 <div class="header_block">    
-    <h1>Hardware Genie</h1>
+    <div class="header_top">
+        <h1>Hardware Genie</h1>
+    </div>
+    <div class="header_buttons">
+        {% if current_user.is_authenticated %}
+            <span class="header_button">{{ current_user.username }}</span>
+            <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+            <a class="header_button" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
     <div class="header_tabs" aria-label="Main navigation tabs">
-        <a class="header_tab" href="{{ url_for('products') }}">Products</a>
+        <details class="nav_dropdown">
+            <summary class="header_tab header_tab--dropdown">Products</summary>
+            <div class="nav_dropdown_menu" aria-label="Product categories">
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+            </div>
+        </details>
         <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
         <a class="header_tab" href="{{ url_for('scraper') }}">Build</a>
     </div>
@@ -20,12 +41,10 @@
         <tr>
             <td class="category-cell" data-href="{{ url_for('products', category='memory') }}" tabindex="0"><a href="{{ url_for('products', category='memory') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('products', category='memory') }}"><br>Memory</a></td>
             <td class="category-cell" data-href="{{ url_for('products', category='video_card') }}" tabindex="0"><a href="{{ url_for('products', category='video_card') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('products', category='video_card') }}"><br>GPU</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='cpu') }}" tabindex="0"><a href="{{ url_for('products', category='cpu') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('products', category='cpu') }}"><br>CPU</a></td>
         </tr>
         <tr>
-            <td class="category-cell" data-href="{{ url_for('products', category='cpu') }}" tabindex="0"><a href="{{ url_for('products', category='cpu') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('products', category='cpu') }}"><br>CPU</a></td>
             <td class="category-cell" data-href="{{ url_for('products', category='internal_hard_drive') }}" tabindex="0"><a href="{{ url_for('products', category='internal_hard_drive') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('products', category='internal_hard_drive') }}"><br>Storage</a></td>
-        </tr>
-         <tr>
             <td class="category-cell" data-href="{{ url_for('products', category='motherboard') }}" tabindex="0"><a href="{{ url_for('products', category='motherboard') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a><a href="{{ url_for('products', category='motherboard') }}"><br>Motherboard</a></td>
             <td class="category-cell" data-href="{{ url_for('products', category='power_supply') }}" tabindex="0"><a href="{{ url_for('products', category='power_supply') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a><a href="{{ url_for('products', category='power_supply') }}"><br>Power Supply</a></td>
         </tr>
