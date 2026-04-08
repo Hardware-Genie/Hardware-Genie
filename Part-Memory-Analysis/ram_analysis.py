@@ -1,5 +1,4 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import re
 
 # Load the CSV and drop any nonexistent values
