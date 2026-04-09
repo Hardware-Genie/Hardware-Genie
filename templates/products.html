@@ -38,7 +38,7 @@
     </nav>
 <div class="search-results-container">
     <div class="search-toolbar">
-        <a class="back-button" href="{{ url_for('index') }}">← Back</a>
+        <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
         <form action="{{ url_for('products') }}" method="GET">
             <input class="search-input" type="text" name="q" value="{{ query }}" placeholder="Search hardware...">
             <button class="search-button" type="submit">Search</button>
@@ -304,6 +304,50 @@ function parsePrice(value) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    const BUILD_FLOW_KEY = 'hardwareGenieProductsFromBuild';
+    const params = new URLSearchParams(window.location.search);
+    const fromBuildParam = params.get('from_build') === '1';
+    let referrerPath = '';
+
+    try {
+        if (document.referrer) {
+            const referrerUrl = new URL(document.referrer);
+            if (referrerUrl.origin === window.location.origin) {
+                referrerPath = referrerUrl.pathname || '';
+            }
+        }
+    } catch (error) {
+        referrerPath = '';
+    }
+
+    const cameFromBuild = referrerPath === '{{ url_for("build_page") }}';
+    const cameFromProducts = referrerPath === '{{ url_for("products") }}' || referrerPath === '{{ url_for("search") }}';
+
+    if (fromBuildParam || cameFromBuild) {
+        sessionStorage.setItem(BUILD_FLOW_KEY, '1');
+    } else if (!cameFromProducts) {
+        sessionStorage.removeItem(BUILD_FLOW_KEY);
+    }
+
+    const inBuildFlow = sessionStorage.getItem(BUILD_FLOW_KEY) === '1';
+    const backButton = document.getElementById('productsBackButton');
+    if (backButton) {
+        backButton.href = inBuildFlow ? '{{ url_for("build_page") }}' : '{{ url_for("index") }}';
+    }
+
+    if (inBuildFlow) {
+        const categoryLinks = document.querySelectorAll('.nav_dropdown_item[href*="{{ url_for("products") }}"]');
+        categoryLinks.forEach((link) => {
+            try {
+                const target = new URL(link.href, window.location.origin);
+                target.searchParams.set('from_build', '1');
+                link.href = target.pathname + target.search;
+            } catch (error) {
+                // Ignore invalid links and keep original href.
+            }
+        });
+    }
+
     const rows = document.querySelectorAll(".clickable-row");
     rows.forEach(row => {
         row.addEventListener("click", (e) => {

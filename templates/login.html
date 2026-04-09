@@ -1,31 +1,68 @@
 {% extends "base.html" %}
 {% block main %}
 
-<h1>Login</h1>
-<form method="POST" action="/login">
-    {{ form.csrf_token }}
-    <label for="email">Email:</label>
-    <input type="email" id="email" name="email" required><br><br>
-    {% if wrong_email %}
-        <p style="color: red;">Email not found. Please try again.</p>
-    {% endif %}
+<section class="auth-page">
+    <div class="auth-card">
+        <h1 class="auth-title">Login</h1>
+        <form class="auth-form" method="POST" action="/login">
+            {{ form.csrf_token }}
 
-    <label for="password">Password:</label>
-    <input type="password" id="password" name="password" required><br><br>
-    {% if wrong_pass %}
-        <p style="color: red;">Incorrect password. Please try again.</p>
-    {% endif %}
+            <label class="auth-label" for="email">Email</label>
+            <input class="auth-input" type="email" id="email" name="email" required>
+            {% if wrong_email %}
+                <p class="auth-error">Email not found. Please try again.</p>
+            {% endif %}
 
-    <button type="submit">Login</button>
+            <label class="auth-label" for="password">Password</label>
+            <input class="auth-input" type="password" id="password" name="password" required>
+            {% if wrong_pass %}
+                <p class="auth-error">Incorrect password. Please try again.</p>
+            {% endif %}
 
-    {% if form_errors %}
-        <ul style="color: red;">
-        {% for field, errors in form_errors.items() %}
-            {% for error in errors %}
-                <li>{{ error }}</li>
-            {% endfor %}
-        {% endfor %}
-        </ul>
-    {% endif %}
-    
+            {% if form_errors %}
+                <ul class="auth-error-list">
+                {% for field, errors in form_errors.items() %}
+                    {% for error in errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div class="auth-actions">
+                <button class="back-button js-auth-back" type="button">Back</button>
+                <button class="auth-submit" type="submit">Login</button>
+            </div>
+
+            <p class="auth-switch">Need an account? <a href="/signup">Sign up</a></p>
+        </form>
+    </div>
+</section>
+
+<script>
+    (function () {
+        var AUTH_RETURN_KEY = "authReturnUrl";
+        var isAuthPath = /\/(login|signup)(\/)?(\?|#|$)/;
+
+        try {
+            if (document.referrer) {
+                var referrerUrl = new URL(document.referrer);
+                if (referrerUrl.origin === window.location.origin && !isAuthPath.test(referrerUrl.pathname)) {
+                    sessionStorage.setItem(AUTH_RETURN_KEY, referrerUrl.pathname + referrerUrl.search + referrerUrl.hash);
+                }
+            }
+        } catch (e) {
+            /* Ignore invalid referrer parsing and keep default fallback */
+        }
+
+        var backTarget = sessionStorage.getItem(AUTH_RETURN_KEY) || "/";
+        var backButton = document.querySelector(".js-auth-back");
+        if (backButton) {
+            backButton.addEventListener("click", function () {
+                window.location.href = backTarget;
+            });
+        }
+    })();
+</script>
+
 {% endblock %}
