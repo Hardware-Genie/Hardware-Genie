@@ -1,24 +1,36 @@
 :root {
-  --primary-bg-color: white;
+  --primary-bg-color: rgb(255,255,255);
   --primary-color: rgb(56,99,90);
+  --black-color: rgb(0,0,0);
+  --box-shadow-color: rgba(0,0,0,0.2);
+  --header-color: rgb(255, 255, 255);
+  --background-gradient-color-1: rgba(31, 95, 85, 0.98);
+  --background-gradient-color-2: rgba(24, 75, 67, 0.98);
+  --dropdown-bg-color: #f6fbfa;
+  --color-1: #183f38;
+  --hover-color: #f9f9f9;
+  --dropdown-hover-border-color: #9dc6bc;
+  --border-color: #ddd;
+  --table-header-color: #eee;
 }
 
 /* Updated Body with New Styles */
 body { 
   font-family: sans-serif; 
   margin: 0px; 
-  background-color: #ffffff; 
+  background-color: var(--primary-bg-color); 
 }
 
 /* Original Header & Nav Elements */
 h1 {
-  color: rgb(0, 0, 0);
+  color: var(--header-color);
   margin: 0;
+  font-size: 3rem;
 }
 
 nav, footer, .header_block {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--primary-bg-color);
   padding: 10px;
   margin: 0;
 }
@@ -56,9 +68,9 @@ nav {
   margin: 0 -20px;
   padding: 0 0px 0px 0;
   box-sizing: border-box;
-  background: linear-gradient(180deg, rgba(31, 95, 85, 0.98) 0%, rgba(24, 75, 67, 0.98) 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, var(--background-gradient-color-1) 0%, var(--background-gradient-color-2) 100%);
+  border-top: 1px solid rgba(var(--primary-bg-color), 0.12);
+  box-shadow: inset 0 1px 0 rgba(var(--primary-bg-color), 0.06);
   overflow: visible;
   flex-wrap: wrap;
 }
@@ -67,8 +79,8 @@ nav {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--primary-bg-color);
+  background-color: rgba(var(--primary-bg-color) 0.08);
   text-decoration: none;
   padding: 12px 18px;
   border: none;
@@ -76,11 +88,11 @@ nav {
   font-weight: 600;
   box-shadow: none;
   cursor: pointer;
-  transition: background-color 0.18s ease;
+  transition: var(--background-color) 0.18s ease;
 }
 
 .header_tab:hover {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(var(--primary-bg-color) 0.15);
 }
 
 .header_tab--dropdown {
@@ -111,16 +123,16 @@ nav {
   position: absolute;
   top: 100%;
   left: 0;
-  width: min(760px, calc(100vw - 40px));
+  width: calc(100vw - 40px);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   padding: 18px;
   border-radius: 0;
-  background: #f6fbfa;
-  border: 1px solid #d7e1de;
+  background: var(--dropdown-bg-color);
+  border: 1px solid var(--border-color);
   border-top: none;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 24px 48px rgba(var(--black-color) 0.18);
   z-index: 20;
 }
 
@@ -132,19 +144,19 @@ nav {
   display: block;
   padding: 14px 16px;
   border-radius: 0;
-  background: #ffffff;
-  color: #183f38;
+  background: var(--primary-bg-color);
+  color: var(--color-1);
   text-decoration: none;
   font-weight: 700;
-  border: 1px solid #d7e1de;
+  border: 1px solid var(--border-color);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .nav_dropdown_item:hover,
 .nav_dropdown_item:focus-visible {
-  background: #edf7f4;
-  border-color: #9dc6bc;
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
+  background: var(--dropdown-hover-color);
+  border-color: var(--dropdown-hover-border-color);
+  box-shadow: 0 10px 18px rgba(var(--black-color) 0.08);
   transform: translateY(-1px);
 }
 
@@ -166,27 +178,27 @@ nav {
   padding: 12px 16px;
   border-radius: 0;
   border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: rgba(var(--primary-bg-color), 0.1);
+  color: var(--primary-bg-color);
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.01em;
   box-shadow: none;
-  transition: background-color 0.18s ease;
+  transition: var(--background-color) 0.18s ease;
 }
 
 .header_button:hover,
 .header_button:focus-visible {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(var(--primary-bg-color), 0.2);
 }
 
 .header_button--secondary {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--primary-bg-color), 0.08);
 }
 
 .header_button--secondary:hover,
 .header_button--secondary:focus-visible {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--primary-bg-color), 0.16);
 }
 
 /* Updated Table Styles */
@@ -199,17 +211,17 @@ table {
 th, td { 
   text-align: left; 
   padding: 12px; 
-  border-bottom: 1px solid #ddd; 
-  border: 1px solid #ddd; /* Kept border from old style but updated color */
+  border-bottom: 1px solid var(--border-color); 
+  border: 1px solid var(--border-color); /* Kept border from old style but updated color */
 }
 
 th { 
-  background-color: #eee; 
-  color: black; /* Updated to match new theme */
+  background-color: var(--table-header-color); 
+  color: var(--black-color); /* Updated to match new theme */
 }
 
 tr:hover { 
-  background-color: #f9f9f9; 
+  background-color: var(--table-row-hover-color); 
 }
 
 /* New Sidebar & Layout Containers */
@@ -217,16 +229,16 @@ tr:hover {
 
 .sidebar { 
   width: 250px; 
-  background: white; 
+  background: var(--primary-bg-color); 
   padding: 20px; 
   border-radius: 8px; 
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+  box-shadow: 0 2px 5px rgba(var(--black-color),0.1); 
   height: fit-content; 
 }
 
 .filter-group { 
   margin-bottom: 15px; 
-  border-bottom: 1px solid #eee; 
+  border-bottom: 1px solid var(--border-color); 
   padding-bottom: 10px; 
 }
 
@@ -242,15 +254,15 @@ select {
   width: 100%; 
   padding: 5px; 
   border-radius: 4px; 
-  border: 1px solid #ccc; 
+  border: 1px solid var(--border-color);
 }
 
 .main-content { 
   flex-grow: 1; 
-  background: white; 
+  background: var(--primary-bg-color); 
   padding: 20px; 
   border-radius: 8px; 
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+  box-shadow: 0 2px 5px var(--box-shadow-color); 
 }
 
 /* Original Utility & Button Classes */
