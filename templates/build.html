@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block main %}
+<nav>
+    <div class="header_block">
+        <div class="header_top">
+            <h1>Hardware Genie</h1>
+        </div>
+        <div class="header_buttons">
+            {% if current_user.is_authenticated %}
+                <p>Current User: {{ current_user.username }}</p>
+                <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+            {% else %}
+                <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+                <a class="header_button" href="{{ url_for('login') }}">Login</a>
+            {% endif %}
+        </div>
+        <div class="header_tabs" aria-label="Main navigation tabs">
+            <details class="nav_dropdown">
+                <summary class="header_tab header_tab--dropdown">Products</summary>
+                <div class="nav_dropdown_menu" aria-label="Product categories">
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+                </div>
+            </details>
+            <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
+            <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+        </div>
+    </div>
+</nav>
+
+<section class="build-page">
+    <div class="build-page__topbar">
+        <a class="back-button" href="{{ url_for('index') }}">← Back</a>
+        <h2>Build Planner</h2>
+    </div>
+
+    <div class="build-summary">
+        <div class="build-summary__block">
+            <p class="build-summary__label">Selected Categories</p>
+            <p class="build-summary__value" id="savedPartsCount">0</p>
+        </div>
+        <div class="build-summary__block">
+            <p class="build-summary__label">Build Total</p>
+            <p class="build-summary__value" id="buildTotal">$0.00</p>
+        </div>
+    </div>
+
+    <div class="build-category-launcher">
+        <h3>Build by Category</h3>
+        <div class="build-category-grid">
+            {% for category in build_categories %}
+                <div class="build-category-card" data-category-key="{{ category.key }}" data-category-label="{{ category.label }}" data-add-url="{{ url_for('products', category=category.key, from_build=1) }}">
+                    <div class="build-category-card__header">
+                        <h4>{{ category.label }}</h4>
+                    </div>
+                    <div class="build-category-card__content">
+                        <p class="build-slot-empty">No part selected yet.</p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<script>
+const BUILD_STORAGE_KEY = 'hardwareGenieBuildList';
+const buildTotal = document.getElementById('buildTotal');
+const savedPartsCount = document.getElementById('savedPartsCount');
+const categoryCards = document.querySelectorAll('.build-category-card');
+
+function getSavedParts() {
+    try {
+        const raw = localStorage.getItem(BUILD_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function setSavedParts(parts) {
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(parts));
+}
+
+function formatPrice(value) {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+        return 'N/A';
+    }
+    return `$${numeric.toFixed(2)}`;
+}
+
+function normalizePartsByCategory(parts) {
+    const categoryMap = {};
+    parts.forEach((part) => {
+        const categoryKey = part && part.categoryKey;
+        if (!categoryKey) {
+            return;
+        }
+        categoryMap[categoryKey] = {
+            categoryKey: categoryKey,
+            categoryLabel: part.categoryLabel || categoryKey,
+            name: part.name || 'Unnamed part',
+            price: part.price,
+            specs: part.specs || '',
+        };
+    });
+    return categoryMap;
+}
+
+function persistNormalizedParts(categoryMap) {
+    const normalizedArray = Object.values(categoryMap);
+    setSavedParts(normalizedArray);
+}
+
+function renderSavedList() {
+    const categoryMap = normalizePartsByCategory(getSavedParts());
+    persistNormalizedParts(categoryMap);
+
+    let total = 0;
+    categoryCards.forEach((card) => {
+        const categoryKey = card.dataset.categoryKey;
+        const categoryLabel = card.dataset.categoryLabel || categoryKey;
+        const addUrl = card.dataset.addUrl;
+        const slot = card.querySelector('.build-category-card__content');
+        const selectedPart = categoryMap[categoryKey];
+
+        if (!slot) {
+            return;
+        }
+
+        slot.innerHTML = '';
+
+        if (!selectedPart) {
+            const row = document.createElement('div');
+            row.className = 'build-slot-row';
+
+            const detailsWrap = document.createElement('div');
+            detailsWrap.className = 'build-slot-details';
+
+            const emptyText = document.createElement('p');
+            emptyText.className = 'build-slot-empty';
+            emptyText.textContent = 'No part selected yet.';
+            detailsWrap.appendChild(emptyText);
+
+            const addLink = document.createElement('a');
+            addLink.className = 'apply-filters-btn build-slot-action';
+            addLink.href = addUrl;
+            addLink.textContent = `Add ${categoryLabel}`;
+
+            row.appendChild(detailsWrap);
+            row.appendChild(addLink);
+            slot.appendChild(row);
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'build-slot-row';
+
+        const detailsWrap = document.createElement('div');
+        detailsWrap.className = 'build-slot-details';
+
+        const details = document.createElement('p');
+        details.className = 'build-slot-part';
+        details.innerHTML = `<strong>${selectedPart.name}</strong> (${formatPrice(selectedPart.price)})`;
+        detailsWrap.appendChild(details);
+
+        if (selectedPart.specs) {
+            const specs = document.createElement('p');
+            specs.className = 'build-slot-specs';
+            specs.textContent = selectedPart.specs;
+            detailsWrap.appendChild(specs);
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'build-remove-btn build-slot-action';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+            const updatedMap = normalizePartsByCategory(getSavedParts());
+            delete updatedMap[categoryKey];
+            persistNormalizedParts(updatedMap);
+            renderSavedList();
+        });
+
+        row.appendChild(detailsWrap);
+        row.appendChild(removeBtn);
+        slot.appendChild(row);
+
+        const priceAsNumber = Number(selectedPart.price);
+        if (!Number.isNaN(priceAsNumber)) {
+            total += priceAsNumber;
+        }
+    });
+
+    buildTotal.textContent = formatPrice(total);
+    savedPartsCount.textContent = String(Object.keys(categoryMap).length);
+}
+renderSavedList();
+</script>
+{% endblock %}

@@ -8,6 +8,8 @@ from app import db
 import os
 import pandas as pd
 import json
+import re
+from urllib.parse import urlencode
 
 from app.forms import LoginForm, SignupForm, WebsiteToScrape
 from app.models import User
@@ -26,7 +28,6 @@ from app import tasks
 import scrapy
 from scrapy.crawler import CrawlerProcess
 
-from part_memory_analysis import ram_analysis
 
 
 
@@ -118,7 +119,99 @@ new_gpu_csv_reader.from_csv('video-card', 'product_name', True)
 new_storage_csv_reader = scraper_csv_reader([], [], [])
 new_storage_csv_reader.from_csv('internal-hard-drive', 'product_name', True)
 
-#used to add the old data into a database
+
+def _normalize_memory_label(value):
+    if value is None:
+        return None
+    return re.sub(r'\s*,\s*', ',', str(value).strip())
+
+
+CATEGORY_FILTER_PRIORITY = {
+    'memory': ['modules', 'speed', 'cas_latency', 'first_word_latency', 'color'],
+    'video_card': ['memory', 'core_clock', 'boost_clock', 'chipset', 'length', 'color'],
+    'cpu': ['core_count', 'core_clock', 'boost_clock', 'tdp', 'graphics', 'smt', 'microarchitecture'],
+    'motherboard': ['max_memory', 'memory_slots', 'socket', 'form_factor', 'color'],
+    'internal_hard_drive': ['capacity', 'type', 'interface', 'form_factor', 'cache'],
+}
+
+FILTER_LABEL_OVERRIDES = {
+    'core_count': 'Core Count',
+    'core_clock': 'Core Clock',
+    'boost_clock': 'Boost Clock',
+    'max_memory': 'Max Memory',
+    'memory_slots': 'Memory Slots',
+    'first_word_latency': 'First Word Latency',
+    'cas_latency': 'CAS Latency',
+    'form_factor': 'Form Factor',
+}
+
+BUILD_TABLE_LABELS = {
+    'cpu': 'CPU',
+    'memory': 'Memory',
+    'video_card': 'Video Card',
+    'motherboard': 'Motherboard',
+    'power_supply': 'Power Supply',
+    'internal_hard_drive': 'Storage',
+}
+
+
+def _safe_parse_price(value):
+    try:
+        return float(str(value).replace('$', '').replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_category_items(table_name):
+    inst = inspect(db.engine)
+    columns = [c['name'] for c in inst.get_columns(table_name)]
+    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
+    group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
+
+    if not group_cols:
+        return []
+
+    group_by_cols = ", ".join(group_cols)
+    sql = text(f"""
+    SELECT *
+    FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
+        FROM {table_name}
+    )
+    WHERE rn = 1
+    """)
+
+    rows = db.session.execute(sql).mappings().all()
+    items = []
+    for row in rows:
+        row_data = dict(row)
+        name = row_data.get('name')
+        if not name:
+            continue
+
+        price = _safe_parse_price(row_data.get('price'))
+        items.append({
+            'name': name,
+            'price': price,
+            'display_price': f"${price:,.2f}" if price is not None else 'N/A',
+        })
+
+    items.sort(key=lambda item: str(item.get('name', '')).lower())
+    return items
+
+
+def _get_build_catalog():
+    catalog = {}
+    for table_name, label in BUILD_TABLE_LABELS.items():
+        catalog[table_name] = {
+            'label': label,
+            'items': _build_category_items(table_name),
+        }
+    return catalog
+
+
+
+# #used to add the old data into a database
 # csv_files = [
 #     r"static\data\old PCpartpicker data\combined_video-card.csv",
 #     r"static\data\old PCpartpicker data\combined_cpu.csv",
@@ -187,7 +280,6 @@ def login():
             return render_template('login.html', wrong_email=1, form=form)
         #    
         #Authenticate user
-        
         try:
             if bcrypt.checkpw((form.password.data).encode('utf-8'), user.password_hash):
                 login_user(user)
@@ -235,73 +327,24 @@ def scraper_status(task_id):
     result = AsyncResult(task_id, app=celery)
     return render_template('scraper_status.html', task_id=task_id, state=result.state, result=result.result, info=result.info)
 
-# The following code is for testing the pypartpicker library and checking if we're being blocked by Cloudflare. It should be run separately from the Flask app, as it uses asyncio and is not designed to be part of a web request handler.
-# pcpp = AsyncClient()
-# @app.route('/search', methods=['GET', 'POST'])
-# async def search_results():
-#     query = request.args.get('q')
-#     if not query:
-#         return redirect(url_for('index'))
-
-#     try:
-#         # Use a context manager to handle session setup/teardown
-#         async with AsyncClient() as pcpp:
-#             search_result = await pcpp.get_part_search(query, region="us")
-#             # Safety check: if the library returned None instead of a result object
-#             if search_result is None:
-#                 return render_template('search_results.html', parts=[], query=query)
-            
-#             parts = search_result.parts
-#     except AttributeError as e:
-#         print(f"Scraping Error (Likely Cloudflare block): {e}")
-#         parts = []
-#     except Exception as e:
-#         print(f"General Error: {e}")
-#         parts = []
-        
-#     return render_template('search_results.html', parts=parts, query=query)
-
-# @app.route('/search')
-# def search():
-#     query = request.args.get('q', '')
-#     all_results = []
-#     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
-    
-#     # Define columns you want to ignore across ALL tables
-#     ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb']
-
-#     if query:
-#         for table_name in tables:
-            # inst = inspect(db.engine)
-            # columns = [c['name'] for c in inst.get_columns(table_name)]
-            
-            # # Filter out the ignored columns
-            # group_cols = [c for c in columns if c.lower() not in ignored_cols]
-            # norm_cols = [f"REPLACE(LOWER(CAST({c} AS TEXT)), ' ', '')" for c in group_cols]
-            # group_by_str = ", ".join(norm_cols)
-            
-            # # Select the 'raw' values but group by normalized versions
-#             sql = text(f"SELECT * FROM {table_name} WHERE name LIKE :q GROUP BY {group_by_str}")
-#             results = db.session.execute(sql, {"q": f"%{query}%"}).mappings().all()
-            
-#             for row in results:
-#                 item = dict(row)
-#                 item['table_name'] = table_name
-#                 item['type_label'] = table_name.replace('_', ' ').title()
-#                 # Identity params should NOT include price_per_gb
-#                 item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
-#                 all_results.append(item)
-
-#     return render_template('search_results.html', results=all_results, query=query)
 
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
     page = request.args.get('page', 1, type=int)
-    sort_by = request.args.get('sort', 'relevance')
+    sort_by = request.args.get('sort', 'alphabetical_asc')
+    from_build = request.args.get('from_build', '0') == '1'
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    min_value = request.args.get('min_value', type=float)
+    max_value = request.args.get('max_value', type=float)
     per_page = 50
-    active_filters = {k: v.split(',') if ',' in v else [v] for k, v in request.args.items() if k not in ['q', 'page', 'sort'] and v}
-    selected_category = active_filters.get('category', [None])[0] if 'category' in active_filters else None
+    active_filter_values = {
+        key: [value for value in values if value]
+        for key, values in request.args.lists()
+        if key not in ['q', 'page', 'sort', 'min_price', 'max_price', 'min_value', 'max_value', 'from_build']
+    }
+    selected_category = active_filter_values.get('category', [None])[0] if 'category' in active_filter_values else None
     if selected_category:
         tables_to_search = [selected_category]
     else:
@@ -310,9 +353,11 @@ def search():
     all_results = []
     filter_options = {}
     price_range = {'min': float('inf'), 'max': 0}
+    value_range = {'min': float('inf'), 'max': 0}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
-    ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'microarchitecture']
+    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
+    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value']
 
     for table_name in tables_to_search:
         inst = inspect(db.engine)
@@ -325,23 +370,23 @@ def search():
             where_parts.append("name LIKE :q")
             params["q"] = f"%{query}%"
 
-        for key, val_list in active_filters.items():
-            if key == 'category':
-                continue
-            if key in columns and val_list:
-                normalized_vals = [v.replace(" ", "").lower() for v in val_list]
-                or_parts = [f"REPLACE(LOWER(CAST({key} AS TEXT)), ' ', '') = :{key}_val_{i}" for i in range(len(normalized_vals))]
-                where_parts.append("(" + " OR ".join(or_parts) + ")")
-                for i, nval in enumerate(normalized_vals):
-                    params[f"{key}_val_{i}"] = nval
-        
         # 2. Define identifying columns and grouping logic
-        group_cols = [c for c in columns if c.lower() not in ignored_cols]
-        norm_group_by = ", ".join([f"REPLACE(LOWER(CAST({c} AS TEXT)), ' ', '')" for c in group_cols])
+        group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
         
-        # 3. Build the final SQL
+        # 3. Build the final SQL - use ROW_NUMBER window function for better performance
         where_clause = " AND ".join(where_parts) if where_parts else "1=1"
-        sql = text(f"SELECT * FROM {table_name} WHERE {where_clause} GROUP BY {norm_group_by}")
+        group_by_cols = ", ".join(group_cols)
+        
+        # Use ROW_NUMBER to get the most recent row for each product
+        sql = text(f"""
+        SELECT *
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
+            FROM {table_name}
+            WHERE {where_clause}
+        )
+        WHERE rn = 1
+        """)
         
         # 4. Execute and Process
         results = db.session.execute(sql, params).mappings().all()
@@ -350,23 +395,81 @@ def search():
             item['table_name'] = table_name
             item['type_label'] = table_name.replace('_', ' ').title()
             item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
-            all_results.append(item)
+            spec_ignored_for_build = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb', 'value', 'deal_quality', 'rn']
+            spec_parts = []
+            for key, value in item.items():
+                if key.lower() in spec_ignored_for_build or value is None or value == '':
+                    continue
+                spec_parts.append(f"{key.replace('_', ' ').title()}: {value}")
+            item['spec_summary'] = " | ".join(spec_parts)
             
-            # Track price range
+            # Populate filter options from the unfiltered baseline set so choices remain visible.
+            for key, val in item.items():
+                if key not in filter_ignored_cols and val:
+                    normalized_val = _normalize_memory_label(val)
+                    if key not in filter_options:
+                        filter_options[key] = set()
+                    filter_options[key].add(normalized_val)
+
+            # Apply selected checkbox filters after building options to avoid shrinking menus.
+            item_matches_active_filters = True
+            for key, val_list in active_filter_values.items():
+                if key == 'category' or key not in columns or not val_list:
+                    continue
+
+                normalized_item_val = str(item.get(key, '')).replace(' ', '').lower()
+                normalized_selected_vals = [str(v).replace(' ', '').lower() for v in val_list]
+                if normalized_item_val not in normalized_selected_vals:
+                    item_matches_active_filters = False
+                    break
+
+            if not item_matches_active_filters:
+                continue
+
+            all_results.append(item)
+
+            # Track price range for currently matched results.
             try:
                 price = float(str(item.get('price', 0)).replace('$', '').replace(',', ''))
                 price_range['min'] = min(price_range['min'], price)
                 price_range['max'] = max(price_range['max'], price)
             except:
                 pass
-            
-            # 5. Populate filter options with normalized values (strip spaces)
-            for key, val in item.items():
-                if key not in ignored_cols and key != 'name' and val:
-                    normalized_val = str(val).strip()
-                    if key not in filter_options:
-                        filter_options[key] = set()
-                    filter_options[key].add(normalized_val)
+
+            # Track value range for memory analysis controls.
+            try:
+                value = float(str(item.get('value', 0)).replace('$', '').replace(',', ''))
+                value_range['min'] = min(value_range['min'], value)
+                value_range['max'] = max(value_range['max'], value)
+            except:
+                pass
+
+    # Apply numeric range filters after collecting latest rows per item
+    if min_price is not None or max_price is not None or min_value is not None or max_value is not None:
+        filtered_results = []
+        for item in all_results:
+            try:
+                item_price = float(str(item.get('price', 0)).replace('$', '').replace(',', '') or 0)
+            except:
+                item_price = None
+
+            try:
+                item_value = float(str(item.get('value', 0)).replace('$', '').replace(',', '') or 0)
+            except:
+                item_value = None
+
+            if min_price is not None and (item_price is None or item_price < min_price):
+                continue
+            if max_price is not None and (item_price is None or item_price > max_price):
+                continue
+            if min_value is not None and (item_value is None or item_value < min_value):
+                continue
+            if max_value is not None and (item_value is None or item_value > max_value):
+                continue
+
+            filtered_results.append(item)
+
+        all_results = filtered_results
 
     # Categorize filters: numeric vs text
     numeric_filters = set()
@@ -380,13 +483,46 @@ def search():
         if key not in numeric_filters:
             text_filters[key] = sorted(list(vals))
 
-    sorted_filters = {k: sorted(list(v)) for k, v in filter_options.items() if k not in numeric_filters}
+    forced_filter_keys = set(CATEGORY_FILTER_PRIORITY.get(selected_category, []))
+    sorted_filters = {
+        k: sorted(list(v), key=lambda x: str(x).lower())
+        for k, v in filter_options.items()
+        if k not in numeric_filters or k in forced_filter_keys
+    }
+
+    # Prioritize requested category-specific filters at the top of the sidebar.
+    if selected_category in CATEGORY_FILTER_PRIORITY:
+        preferred_order = CATEGORY_FILTER_PRIORITY[selected_category]
+        ordered_filters = {}
+
+        for filter_key in preferred_order:
+            if filter_key in sorted_filters:
+                ordered_filters[filter_key] = sorted_filters[filter_key]
+
+        for filter_key, values in sorted_filters.items():
+            if filter_key not in ordered_filters:
+                ordered_filters[filter_key] = values
+
+        sorted_filters = ordered_filters
+
+    filter_labels = {
+        filter_key: FILTER_LABEL_OVERRIDES.get(filter_key, filter_key.replace('_', ' ').title())
+        for filter_key in sorted_filters
+    }
     
     # Apply sorting
-    if sort_by == 'price_low':
+    if sort_by in ['relevance', 'alphabetical_asc']:
+        all_results.sort(key=lambda x: str(x.get('name', '')).lower())
+    elif sort_by == 'alphabetical_desc':
+        all_results.sort(key=lambda x: str(x.get('name', '')).lower(), reverse=True)
+    elif sort_by == 'price_low':
         all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0))
     elif sort_by == 'price_high':
         all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0), reverse=True)
+    elif sort_by == 'value_best':
+        all_results.sort(key=lambda x: float(x.get('value', 0) or 0), reverse=True)
+    elif sort_by == 'value_worst':
+        all_results.sort(key=lambda x: float(x.get('value', 0) or 0))
 
     total_results = len(all_results)
     total_pages = max(1, (total_results + per_page - 1) // per_page)
@@ -400,34 +536,75 @@ def search():
     paginated_results = all_results[start_idx:end_idx]
     start_item = start_idx + 1 if total_results > 0 else 0
     end_item = min(end_idx, total_results)
-    
-    # Flatten active_filters back to original format for template
-    flat_active_filters = {}
-    for k, v_list in active_filters.items():
-        if v_list:
-            flat_active_filters[k] = v_list[0] if len(v_list) == 1 else ','.join(v_list)
+
+    flat_active_filters = {
+        key: values[0] if len(values) == 1 else values
+        for key, values in active_filter_values.items()
+        if values
+    }
+
+    pagination_query_items = []
+    if query:
+        pagination_query_items.append(('q', query))
+    if sort_by:
+        pagination_query_items.append(('sort', sort_by))
+    if from_build:
+        pagination_query_items.append(('from_build', '1'))
+    for key, values in active_filter_values.items():
+        for value in values:
+            pagination_query_items.append((key, value))
+    if min_price is not None:
+        pagination_query_items.append(('min_price', min_price))
+    if max_price is not None:
+        pagination_query_items.append(('max_price', max_price))
+    if min_value is not None:
+        pagination_query_items.append(('min_value', min_value))
+    if max_value is not None:
+        pagination_query_items.append(('max_value', max_value))
+    pagination_query_string = urlencode(pagination_query_items, doseq=True)
     
     if price_range['min'] == float('inf'):
         price_range['min'] = 0
+    if value_range['min'] == float('inf'):
+        value_range['min'] = 0
     
     return render_template('products.html', 
                            results=paginated_results,
                            query=query, 
                            filter_options=sorted_filters, 
+                           filter_labels=filter_labels,
                            active_filters=flat_active_filters,
-                           all_active_filters=active_filters,
+                           all_active_filters=active_filter_values,
                            sort_by=sort_by,
+                           selected_category=selected_category,
+                           show_memory_analysis=selected_category == 'memory',
+                           pagination_query_string=pagination_query_string,
                            page=page,
                            total_pages=total_pages,
                            total_results=total_results,
                            start_item=start_item,
                            end_item=end_item,
-                           price_range=price_range)
+                           price_range=price_range,
+                           value_range=value_range,
+                           min_price=min_price,
+                           max_price=max_price,
+                           min_value=min_value,
+                           max_value=max_value,
+                           from_build=from_build)
 
 
 @app.route('/products')
 def products():
     return search()
+
+
+@app.route('/build')
+def build_page():
+    build_categories = [
+        {'key': key, 'label': label}
+        for key, label in BUILD_TABLE_LABELS.items()
+    ]
+    return render_template('build.html', build_categories=build_categories)
 
 
 @app.route('/history')

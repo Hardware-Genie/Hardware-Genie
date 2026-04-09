@@ -32,7 +32,7 @@
                     </div>
                 </details>
                 <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
-                <a class="header_tab" href="{{ url_for('scraper') }}">Build</a>
+                <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
             </div>
         </div>
     </nav>
@@ -74,12 +74,38 @@
                         </div>
                     </details>
                 </div>
+
+                <div class="filter-section">
+                    <details class="filter-collapsible" open>
+                        <summary class="filter-header">Price Range</summary>
+                        <div class="filter-options">
+                            <label class="filter-checkbox">Min Price</label>
+                            <input type="number" name="min_price" min="0" step="0.01" value="{{ min_price if min_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.min) }}">
+                            <label class="filter-checkbox">Max Price</label>
+                            <input type="number" name="max_price" min="0" step="0.01" value="{{ max_price if max_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.max) }}">
+                        </div>
+                    </details>
+                </div>
+
+                {% if show_memory_analysis %}
+                    <div class="filter-section">
+                        <details class="filter-collapsible" open>
+                            <summary class="filter-header">Value Range</summary>
+                            <div class="filter-options">
+                                <label class="filter-checkbox">Min Value</label>
+                                <input type="number" name="min_value" min="0" step="0.001" value="{{ min_value if min_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.min) }}">
+                                <label class="filter-checkbox">Max Value</label>
+                                <input type="number" name="max_value" min="0" step="0.001" value="{{ max_value if max_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.max) }}">
+                            </div>
+                        </details>
+                    </div>
+                {% endif %}
                 
                 <!-- Other Filters -->
                 {% for spec_name, options in filter_options.items() %}
                     <div class="filter-section">
                         <details class="filter-collapsible">
-                            <summary class="filter-header">{{ spec_name.replace('_', ' ').title() }}</summary>
+                            <summary class="filter-header">{{ filter_labels.get(spec_name, spec_name.replace('_', ' ').title()) }}</summary>
                             <div class="filter-options">
                                 {% for opt in options %}
                                     <label class="filter-checkbox">
@@ -117,28 +143,33 @@
             <div class="sort-control">
                 <label for="sortSelect">Sort by:</label>
                 <select id="sortSelect" name="sort" onchange="updateSort(this.value)">
-                    <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance</option>
+                    <option value="alphabetical_asc" {% if sort_by == 'alphabetical_asc' or sort_by == 'relevance' %}selected{% endif %}>Alphabetical: A to Z</option>
+                    <option value="alphabetical_desc" {% if sort_by == 'alphabetical_desc' %}selected{% endif %}>Alphabetical: Z to A</option>
                     <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price: Low to High</option>
                     <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                    {% if show_memory_analysis %}
+                        <option value="value_best" {% if sort_by == 'value_best' %}selected{% endif %}>Best Value</option>
+                        <option value="value_worst" {% if sort_by == 'value_worst' %}selected{% endif %}>Worst Value</option>
+                    {% endif %}
                 </select>
             </div>
 
             {% if total_pages > 1 %}
                 <div class="pager">
                     {% if page > 1 %}
-                        <a href="{{ url_for('products', q=query, page=page-1, sort=sort_by, **active_filters) }}">Previous 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
                     {% endif %}
 
                     {% for p in range(start_page, end_page + 1) %}
                         {% if p == page %}
                             <span class="current-page">{{ p }}</span>
                         {% else %}
-                            <a href="{{ url_for('products', q=query, page=p, sort=sort_by, **active_filters) }}">{{ p }}</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                         {% endif %}
                     {% endfor %}
 
                     {% if page < total_pages %}
-                        <a href="{{ url_for('products', q=query, page=page+1, sort=sort_by, **active_filters) }}">Next 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
                     {% endif %}
                 </div>
             {% endif %}
@@ -151,6 +182,11 @@
                             <th>Item Name</th>
                             <th>Specifications</th>
                             <th>Latest Price</th>
+                            <th>Add to Build</th>
+                            {% if show_memory_analysis %}
+                                <th>Value</th>
+                                <th>Deal Quality</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -164,13 +200,30 @@
                             </td>
                             <td>
                                 {% for key, value in item.items() %}
-                                    {% set ignored = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb'] %}
+                                    {% set ignored = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb', 'value', 'deal_quality'] %}
                                     {% if key.lower() not in ignored and value %}
                                         <span class="spec-tag"><strong>{{ key.replace('_', ' ') }}:</strong> {{ value }}</span>
                                     {% endif %}
                                 {% endfor %}
                             </td>
                             <td>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="add-to-build-btn"
+                                    data-category-key="{{ item.table_name }}"
+                                    data-category-label="{{ item.type_label }}"
+                                    data-name="{{ item.name }}"
+                                    data-price="{{ item.price if item.price is not none else '' }}"
+                                    data-specs="{{ item.spec_summary if item.spec_summary else '' }}"
+                                >
+                                    Add
+                                </button>
+                            </td>
+                            {% if show_memory_analysis %}
+                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
+                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -179,19 +232,19 @@
                 {% if total_pages > 1 %}
                     <div class="pager">
                         {% if page > 1 %}
-                            <a href="{{ url_for('products', q=query, page=page-1, sort=sort_by, **active_filters) }}">Previous 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
                         {% endif %}
 
                         {% for p in range(start_page, end_page + 1) %}
                             {% if p == page %}
                                 <span class="current-page">{{ p }}</span>
                             {% else %}
-                                <a href="{{ url_for('products', q=query, page=p, sort=sort_by, **active_filters) }}">{{ p }}</a>
+                                <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                             {% endif %}
                         {% endfor %}
 
                         {% if page < total_pages %}
-                            <a href="{{ url_for('products', q=query, page=page+1, sort=sort_by, **active_filters) }}">Next 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
                         {% endif %}
                     </div>
                 {% endif %}
@@ -202,11 +255,52 @@
     </div>
 </div>
 <script>
+const BUILD_STORAGE_KEY = 'hardwareGenieBuildList';
+
 function updateSort(sortValue) {
     const params = new URLSearchParams(window.location.search);
     params.set('sort', sortValue);
     params.set('page', '1');
     window.location.href = '?' + params.toString();
+}
+
+function getSavedParts() {
+    try {
+        const raw = localStorage.getItem(BUILD_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function setSavedParts(parts) {
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(parts));
+}
+
+function normalizePartsByCategory(parts) {
+    const categoryMap = {};
+    parts.forEach((part) => {
+        if (!part || !part.categoryKey) {
+            return;
+        }
+        categoryMap[part.categoryKey] = {
+            categoryKey: part.categoryKey,
+            categoryLabel: part.categoryLabel || part.categoryKey,
+            name: part.name || 'Unnamed part',
+            price: part.price,
+            specs: part.specs || '',
+        };
+    });
+    return categoryMap;
+}
+
+function parsePrice(value) {
+    const raw = String(value || '').replace('$', '').replace(',', '').trim();
+    if (!raw) {
+        return null;
+    }
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -225,7 +319,6 @@ document.addEventListener("DOMContentLoaded", () => {
         filterForm.addEventListener('submit', (e) => {
             e.preventDefault();
             
-            // Get all checkbox and radio values grouped by name
             const formData = new FormData(filterForm);
             const params = new URLSearchParams();
             
@@ -237,26 +330,72 @@ document.addEventListener("DOMContentLoaded", () => {
             if (currentParams.has('sort')) {
                 params.append('sort', currentParams.get('sort'));
             }
-            
-            // Collect all values by field name
-            const fieldValues = {};
-            for (const [name, value] of formData.entries()) {
-                if (!fieldValues[name]) {
-                    fieldValues[name] = [];
-                }
-                fieldValues[name].push(value);
+            if (currentParams.has('from_build')) {
+                params.append('from_build', currentParams.get('from_build'));
             }
             
-            // Add to params as comma-separated values
-            for (const [name, values] of Object.entries(fieldValues)) {
-                if (values.length > 0 && values[0] !== '') {
-                    params.append(name, values.join(','));
+            for (const [name, value] of formData.entries()) {
+                if (value !== '') {
+                    params.append(name, value);
                 }
             }
             
             window.location.href = window.location.pathname + '?' + params.toString();
         });
     }
+
+    const addButtons = document.querySelectorAll('.add-to-build-btn');
+    let categoryMap = normalizePartsByCategory(getSavedParts());
+    setSavedParts(Object.values(categoryMap));
+
+    addButtons.forEach((button) => {
+        const categoryKey = button.dataset.categoryKey || '';
+        const partName = button.dataset.name || '';
+        const existing = categoryMap[categoryKey];
+
+        if (existing && existing.name === partName) {
+            button.textContent = 'Added';
+            button.disabled = true;
+            return;
+        }
+
+        if (existing && existing.name !== partName) {
+            button.textContent = 'Category Filled';
+            button.disabled = true;
+            return;
+        }
+    });
+
+    addButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            categoryMap = normalizePartsByCategory(getSavedParts());
+            const categoryKey = button.dataset.categoryKey || '';
+            const partName = button.dataset.name || '';
+            const existing = categoryMap[categoryKey];
+
+            if (existing && existing.name === partName) {
+                button.textContent = 'Added';
+                button.disabled = true;
+                return;
+            }
+
+            if (existing && existing.name !== partName) {
+                button.textContent = 'Category Filled';
+                button.disabled = true;
+                return;
+            }
+
+            categoryMap[categoryKey] = {
+                categoryKey: button.dataset.categoryKey || '',
+                categoryLabel: button.dataset.categoryLabel || 'Part',
+                name: button.dataset.name || 'Unnamed part',
+                price: parsePrice(button.dataset.price),
+                specs: button.dataset.specs || '',
+            };
+            setSavedParts(Object.values(categoryMap));
+            window.location.href = "{{ url_for('build_page') }}";
+        });
+    });
 });
 </script>
 </body>

@@ -45,9 +45,3 @@ def analyze_ram_groups_hist(groups):
         results[capacity] = df
 
     return results
-
-# Analyze the RAM groups
-ram_analysis_results = analyze_ram_groups_hist(ram_lists)
-# Example: Print the analysis for 32GB RAM
-print(ram_analysis_results[32][['name', 'value', 'deal_quality']])
-
