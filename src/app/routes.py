@@ -145,6 +145,8 @@ FILTER_LABEL_OVERRIDES = {
     'form_factor': 'Form Factor',
 }
 
+ANALYSIS_VALUE_CATEGORIES = {'memory', 'power_supply'}
+
 BUILD_TABLE_LABELS = {
     'cpu': 'CPU',
     'memory': 'Memory',
@@ -577,7 +579,7 @@ def search():
                            all_active_filters=active_filter_values,
                            sort_by=sort_by,
                            selected_category=selected_category,
-                           show_memory_analysis=selected_category == 'memory',
+                           show_memory_analysis=selected_category in ANALYSIS_VALUE_CATEGORIES,
                            pagination_query_string=pagination_query_string,
                            page=page,
                            total_pages=total_pages,
