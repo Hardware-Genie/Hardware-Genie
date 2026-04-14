@@ -1,4 +1,5 @@
-# 
+# List of columns to add when displaying on website
+# No extra columns to present
 
 import pandas as pd
 import re
