@@ -12,7 +12,7 @@ import re
 from urllib.parse import urlencode
 
 from app.forms import LoginForm, SignupForm, WebsiteToScrape
-from app.models import User
+from app.models import User, SavedBuild
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
 from app import tasks
@@ -156,6 +156,15 @@ BUILD_TABLE_LABELS = {
     'internal_hard_drive': 'Storage',
 }
 
+TREND_CATEGORY_LABELS = {
+    'cpu': 'CPUs',
+    'memory': 'Memory',
+    'video_card': 'Video Cards',
+    'motherboard': 'Motherboards',
+    'power_supply': 'Power Supplies',
+    'internal_hard_drive': 'Hard Drives',
+}
+
 
 def _safe_parse_price(value):
     try:
@@ -210,6 +219,55 @@ def _get_build_catalog():
             'items': _build_category_items(table_name),
         }
     return catalog
+
+
+def _build_trend_series(table_name):
+    sql = text(f"""
+    SELECT snapshot_date,
+           AVG(CAST(REPLACE(REPLACE(CAST(price AS TEXT), '$', ''), ',', '') AS REAL)) AS avg_price,
+        MIN(CAST(REPLACE(REPLACE(CAST(price AS TEXT), '$', ''), ',', '') AS REAL)) AS min_price,
+        MAX(CAST(REPLACE(REPLACE(CAST(price AS TEXT), '$', ''), ',', '') AS REAL)) AS max_price,
+           COUNT(*) AS sample_count
+    FROM {table_name}
+    WHERE price IS NOT NULL
+      AND TRIM(CAST(price AS TEXT)) != ''
+    GROUP BY snapshot_date
+    ORDER BY snapshot_date ASC
+    """)
+
+    rows = db.session.execute(sql).mappings().all()
+    labels = []
+    prices = []
+    min_prices = []
+    max_prices = []
+    sample_counts = []
+
+    for row in rows:
+        snapshot_date = row.get('snapshot_date')
+        avg_price = _safe_parse_price(row.get('avg_price'))
+        min_price = _safe_parse_price(row.get('min_price'))
+        max_price = _safe_parse_price(row.get('max_price'))
+        if snapshot_date is None or avg_price is None:
+            continue
+
+        if min_price is None:
+            min_price = avg_price
+        if max_price is None:
+            max_price = avg_price
+
+        labels.append(str(snapshot_date))
+        prices.append(round(avg_price, 2))
+        min_prices.append(round(min_price, 2))
+        max_prices.append(round(max_price, 2))
+        sample_counts.append(int(row.get('sample_count') or 0))
+
+    return {
+        'labels': labels,
+        'prices': prices,
+        'min_prices': min_prices,
+        'max_prices': max_prices,
+        'sample_counts': sample_counts,
+    }
 
 
 
@@ -359,7 +417,7 @@ def search():
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
-    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value']
+    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count']
 
     for table_name in tables_to_search:
         inst = inspect(db.engine)
@@ -383,7 +441,9 @@ def search():
         sql = text(f"""
         SELECT *
         FROM (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
+            SELECT *,
+                   ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn,
+                   COUNT(*) OVER (PARTITION BY {group_by_cols}) as snapshot_count
             FROM {table_name}
             WHERE {where_clause}
         )
@@ -397,7 +457,8 @@ def search():
             item['table_name'] = table_name
             item['type_label'] = table_name.replace('_', ' ').title()
             item['identity_params'] = {k: v for k, v in item.items() if k in group_cols}
-            spec_ignored_for_build = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb', 'value', 'deal_quality', 'rn']
+            item['snapshot_count'] = int(item.get('snapshot_count') or 0)
+            spec_ignored_for_build = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb', 'value', 'deal_quality', 'rn', 'snapshot_count']
             spec_parts = []
             for key, value in item.items():
                 if key.lower() in spec_ignored_for_build or value is None or value == '':
@@ -600,6 +661,24 @@ def products():
     return search()
 
 
+@app.route('/trends')
+def trends():
+    trend_data = []
+    for table_name, label in TREND_CATEGORY_LABELS.items():
+        trend_series = _build_trend_series(table_name)
+        trend_data.append({
+            'key': table_name,
+            'label': label,
+            'labels': trend_series['labels'],
+            'prices': trend_series['prices'],
+            'min_prices': trend_series['min_prices'],
+            'max_prices': trend_series['max_prices'],
+            'sample_counts': trend_series['sample_counts'],
+        })
+
+    return render_template('trends.html', trend_data=trend_data)
+
+
 @app.route('/build')
 def build_page():
     build_categories = [
@@ -607,6 +686,66 @@ def build_page():
         for key, label in BUILD_TABLE_LABELS.items()
     ]
     return render_template('build.html', build_categories=build_categories)
+
+
+@app.route('/api/builds', methods=['GET', 'POST'])
+@login_required
+def saved_builds_api():
+    if request.method == 'GET':
+        builds = (
+            SavedBuild.query
+            .filter_by(user_id=current_user.id)
+            .order_by(SavedBuild.updated_at.desc(), SavedBuild.id.desc())
+            .all()
+        )
+        return jsonify([
+            {
+                'id': build.id,
+                'build_name': build.build_name,
+                'build_data': build.build_data or [],
+                'item_count': len(build.build_data or []),
+                'created_at': build.created_at.isoformat() if build.created_at else None,
+                'updated_at': build.updated_at.isoformat() if build.updated_at else None,
+            }
+            for build in builds
+        ])
+
+    payload = request.get_json(silent=True) or {}
+    build_name = str(payload.get('build_name', '')).strip()
+    build_data = payload.get('build_data', [])
+
+    if not build_name:
+        return jsonify({'error': 'Build name is required.'}), 400
+    if not isinstance(build_data, list):
+        return jsonify({'error': 'Build data must be a list.'}), 400
+
+    saved_build = SavedBuild(
+        user_id=current_user.id,
+        build_name=build_name,
+        build_data=build_data,
+    )
+    db.session.add(saved_build)
+    db.session.commit()
+
+    return jsonify({
+        'id': saved_build.id,
+        'build_name': saved_build.build_name,
+        'build_data': saved_build.build_data or [],
+        'created_at': saved_build.created_at.isoformat() if saved_build.created_at else None,
+    }), 201
+
+
+@app.route('/api/builds/<int:build_id>', methods=['GET'])
+@login_required
+def saved_build_detail(build_id):
+    saved_build = SavedBuild.query.filter_by(id=build_id, user_id=current_user.id).first_or_404()
+    return jsonify({
+        'id': saved_build.id,
+        'build_name': saved_build.build_name,
+        'build_data': saved_build.build_data or [],
+        'created_at': saved_build.created_at.isoformat() if saved_build.created_at else None,
+        'updated_at': saved_build.updated_at.isoformat() if saved_build.updated_at else None,
+    })
 
 
 @app.route('/history')
@@ -631,6 +770,10 @@ def item_history():
     sql = text(f"SELECT * FROM {table_type} WHERE {where_clause} ORDER BY snapshot_date ASC")
     
     rows = db.session.execute(sql, clean_params).mappings().all()
+
+    product_name = filters.get('name')
+    if not product_name and rows:
+        product_name = rows[0].get('name')
     
     # Process dates and prices for the chart
     labels = [row['snapshot_date'] for row in rows]
@@ -646,8 +789,9 @@ def item_history():
     return render_template('item_history.html', 
                            history=rows, 
                            specs=filters,
-                           dates=json.dumps(labels), 
-                           prices=json.dumps(prices))
+                           name=product_name,
+                           dates=labels,
+                           prices=prices)
 
 @app.route('/memory', methods=['GET', 'POST'])
 def memory_page():

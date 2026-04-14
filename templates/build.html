@@ -3,7 +3,7 @@
 <nav>
     <div class="header_block">
         <div class="header_top">
-            <h1>Hardware Genie</h1>
+            <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
         </div>
         <div class="header_buttons">
             {% if current_user.is_authenticated %}
@@ -26,16 +26,20 @@
                     <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
                 </div>
             </details>
-            <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
+            <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
             <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
         </div>
     </div>
 </nav>
 
-<section class="build-page">
+<section class="build-page" data-is-authenticated="{{ '1' if current_user.is_authenticated else '0' }}">
     <div class="build-page__topbar">
         <a class="back-button" href="{{ url_for('index') }}">← Back</a>
         <h2>Build Planner</h2>
+        <div class="build-page__actions">
+            <button type="button" class="build-action-btn" id="saveBuildButton">Save Build</button>
+            <button type="button" class="build-action-btn build-action-btn--secondary" id="loadBuildButton">Load Build</button>
+        </div>
     </div>
 
     <div class="build-summary">
@@ -66,11 +70,50 @@
     </div>
 </section>
 
+<dialog class="build-library-dialog" id="buildLibraryDialog">
+    <form method="dialog" class="build-library-dialog__panel">
+        <h3>Saved Builds</h3>
+        <p class="build-library-dialog__message" id="buildLibraryMessage">Loading builds...</p>
+        <label class="build-library-dialog__label" for="savedBuildSelect">Choose a build</label>
+        <select id="savedBuildSelect" class="build-library-dialog__select"></select>
+        <div class="build-library-dialog__actions">
+            <button type="button" class="build-action-btn" id="loadSelectedBuildButton">Load Selected</button>
+            <button type="button" class="build-action-btn build-action-btn--secondary" id="closeBuildLibraryButton">Close</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="build-library-dialog" id="saveBuildDialog">
+    <form method="dialog" class="build-library-dialog__panel">
+        <h3>Save Build</h3>
+        <p class="build-library-dialog__message" id="saveBuildMessage">Enter a name for this build.</p>
+        <label class="build-library-dialog__label" for="saveBuildNameInput">Build name</label>
+        <input id="saveBuildNameInput" class="build-library-dialog__select" type="text" maxlength="120" placeholder="My Gaming Build">
+        <div class="build-library-dialog__actions">
+            <button type="button" class="build-action-btn" id="confirmSaveBuildButton">Save</button>
+            <button type="button" class="build-action-btn build-action-btn--secondary" id="cancelSaveBuildButton">Cancel</button>
+        </div>
+    </form>
+</dialog>
+
 <script>
 const BUILD_STORAGE_KEY = 'hardwareGenieBuildList';
+const IS_AUTHENTICATED = document.querySelector('.build-page')?.dataset.isAuthenticated === '1';
 const buildTotal = document.getElementById('buildTotal');
 const savedPartsCount = document.getElementById('savedPartsCount');
 const categoryCards = document.querySelectorAll('.build-category-card');
+const saveBuildButton = document.getElementById('saveBuildButton');
+const loadBuildButton = document.getElementById('loadBuildButton');
+const buildLibraryDialog = document.getElementById('buildLibraryDialog');
+const buildLibraryMessage = document.getElementById('buildLibraryMessage');
+const savedBuildSelect = document.getElementById('savedBuildSelect');
+const loadSelectedBuildButton = document.getElementById('loadSelectedBuildButton');
+const closeBuildLibraryButton = document.getElementById('closeBuildLibraryButton');
+const saveBuildDialog = document.getElementById('saveBuildDialog');
+const saveBuildMessage = document.getElementById('saveBuildMessage');
+const saveBuildNameInput = document.getElementById('saveBuildNameInput');
+const confirmSaveBuildButton = document.getElementById('confirmSaveBuildButton');
+const cancelSaveBuildButton = document.getElementById('cancelSaveBuildButton');
 
 function getSavedParts() {
     try {
@@ -115,6 +158,163 @@ function normalizePartsByCategory(parts) {
 function persistNormalizedParts(categoryMap) {
     const normalizedArray = Object.values(categoryMap);
     setSavedParts(normalizedArray);
+}
+
+function getCurrentBuildPayload() {
+    const categoryMap = normalizePartsByCategory(getSavedParts());
+    return Object.values(categoryMap);
+}
+
+function openBuildLibraryDialog() {
+    if (typeof buildLibraryDialog.showModal === 'function') {
+        buildLibraryDialog.showModal();
+    } else {
+        buildLibraryDialog.setAttribute('open', 'open');
+    }
+}
+
+function closeBuildLibraryDialog() {
+    if (typeof buildLibraryDialog.close === 'function') {
+        buildLibraryDialog.close();
+    } else {
+        buildLibraryDialog.removeAttribute('open');
+    }
+}
+
+function openSaveBuildDialog() {
+    if (!saveBuildDialog) {
+        return;
+    }
+    saveBuildMessage.textContent = 'Enter a name for this build.';
+    saveBuildNameInput.value = '';
+    if (typeof saveBuildDialog.showModal === 'function') {
+        saveBuildDialog.showModal();
+    } else {
+        saveBuildDialog.setAttribute('open', 'open');
+    }
+    saveBuildNameInput.focus();
+}
+
+function closeSaveBuildDialog() {
+    if (!saveBuildDialog) {
+        return;
+    }
+    if (typeof saveBuildDialog.close === 'function') {
+        saveBuildDialog.close();
+    } else {
+        saveBuildDialog.removeAttribute('open');
+    }
+}
+
+async function saveCurrentBuild() {
+    if (!IS_AUTHENTICATED) {
+        window.location.href = "{{ url_for('login') }}";
+        return;
+    }
+
+    const buildName = (saveBuildNameInput.value || '').trim();
+    if (!buildName) {
+        saveBuildMessage.textContent = 'Please enter a build name.';
+        saveBuildNameInput.focus();
+        return;
+    }
+
+    const response = await fetch("{{ url_for('saved_builds_api') }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            build_name: buildName.trim(),
+            build_data: getCurrentBuildPayload()
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        saveBuildMessage.textContent = errorData.error || 'Unable to save build.';
+        return;
+    }
+
+    closeSaveBuildDialog();
+}
+
+function populateBuildLibraryOptions(builds) {
+    savedBuildSelect.innerHTML = '';
+
+    if (!builds.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No saved builds yet';
+        savedBuildSelect.appendChild(option);
+        savedBuildSelect.disabled = true;
+        loadSelectedBuildButton.disabled = true;
+        buildLibraryMessage.textContent = 'You do not have any saved builds yet.';
+        return;
+    }
+
+    builds.forEach((build) => {
+        const option = document.createElement('option');
+        option.value = String(build.id);
+        const createdAt = build.created_at ? new Date(build.created_at).toLocaleString() : 'Unknown date';
+        option.textContent = `${build.build_name} (${build.item_count} items) - ${createdAt}`;
+        savedBuildSelect.appendChild(option);
+    });
+
+    savedBuildSelect.disabled = false;
+    loadSelectedBuildButton.disabled = false;
+    buildLibraryMessage.textContent = 'Select a build to load it into the planner.';
+}
+
+async function openBuildLibrary() {
+    if (!IS_AUTHENTICATED) {
+        window.location.href = "{{ url_for('login') }}";
+        return;
+    }
+
+    buildLibraryMessage.textContent = 'Loading builds...';
+    savedBuildSelect.innerHTML = '';
+    savedBuildSelect.disabled = true;
+    loadSelectedBuildButton.disabled = true;
+    openBuildLibraryDialog();
+
+    const response = await fetch("{{ url_for('saved_builds_api') }}", {
+        headers: {
+            'Accept': 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        buildLibraryMessage.textContent = 'Unable to load saved builds.';
+        return;
+    }
+
+    const builds = await response.json();
+    populateBuildLibraryOptions(Array.isArray(builds) ? builds : []);
+}
+
+async function loadSelectedBuild() {
+    const buildId = savedBuildSelect.value;
+    if (!buildId) {
+        return;
+    }
+
+    const response = await fetch(`{{ url_for('saved_builds_api') }}/${buildId}`, {
+        headers: {
+            'Accept': 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        window.alert('Unable to load the selected build.');
+        return;
+    }
+
+    const build = await response.json();
+    const buildParts = Array.isArray(build.build_data) ? build.build_data : [];
+    setSavedParts(buildParts);
+    renderSavedList();
+    closeBuildLibraryDialog();
 }
 
 function renderSavedList() {
@@ -201,5 +401,58 @@ function renderSavedList() {
     savedPartsCount.textContent = String(Object.keys(categoryMap).length);
 }
 renderSavedList();
+
+if (saveBuildButton) {
+    saveBuildButton.addEventListener('click', () => {
+        if (!IS_AUTHENTICATED) {
+            window.location.href = "{{ url_for('login') }}";
+            return;
+        }
+        openSaveBuildDialog();
+    });
+}
+
+if (loadBuildButton) {
+    loadBuildButton.addEventListener('click', () => {
+        openBuildLibrary().catch(() => {
+            buildLibraryMessage.textContent = 'Unable to load saved builds.';
+        });
+    });
+}
+
+if (loadSelectedBuildButton) {
+    loadSelectedBuildButton.addEventListener('click', () => {
+        loadSelectedBuild().catch(() => {
+            window.alert('Unable to load the selected build.');
+        });
+    });
+}
+
+if (closeBuildLibraryButton) {
+    closeBuildLibraryButton.addEventListener('click', closeBuildLibraryDialog);
+}
+
+if (confirmSaveBuildButton) {
+    confirmSaveBuildButton.addEventListener('click', () => {
+        saveCurrentBuild().catch(() => {
+            saveBuildMessage.textContent = 'Unable to save build.';
+        });
+    });
+}
+
+if (cancelSaveBuildButton) {
+    cancelSaveBuildButton.addEventListener('click', closeSaveBuildDialog);
+}
+
+if (saveBuildNameInput) {
+    saveBuildNameInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveCurrentBuild().catch(() => {
+                saveBuildMessage.textContent = 'Unable to save build.';
+            });
+        }
+    });
+}
 </script>
 {% endblock %}

@@ -8,7 +8,7 @@
     <nav>
         <div class="header_block">    
             <div class="header_top">
-                <h1>Hardware Genie</h1>
+                <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
             </div>
             <div class="header_buttons">
                 {% if current_user.is_authenticated %}
@@ -31,7 +31,7 @@
                         <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
                     </div>
                 </details>
-                <a class="header_tab" href="{{ url_for('scraper') }}">Trends</a>
+                <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
                 <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
             </div>
         </div>
@@ -132,7 +132,17 @@
             {% set start_page = [1, page - 2] | max %}
             {% set end_page = [total_pages, start_page + 4] | min %}
             {% set start_page = [1, end_page - 4] | max %}
-            {% if query %}
+            {% set category_titles = {
+                'video_card': 'Video Cards',
+                'cpu': 'CPUs',
+                'power_supply': 'Power Supplies',
+                'motherboard': 'Motherboards',
+                'memory': 'Memory',
+                'internal_hard_drive': 'Hard Drives'
+            } %}
+            {% if selected_category %}
+                <h2>{{ category_titles.get(selected_category, selected_category.replace('_', ' ').title()) }}</h2>
+            {% elif query %}
                 <h2>Results for "{{ query }}"</h2>
             {% else %}
                 <h2>All Products</h2>
@@ -178,15 +188,13 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Category</th>
-                            <th>Item Name</th>
-                            <th>Specifications</th>
-                            <th>Latest Price</th>
-                            <th>Add to Build</th>
                             {% if show_memory_analysis %}
                                 <th>Value</th>
                                 <th>Deal Quality</th>
                             {% endif %}
+                            <th>Item Name</th>
+                            <th>Latest Price</th>
+                            <th>Add to Build</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -194,19 +202,22 @@
                         {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
                         
                         <tr class="clickable-row" data-href="{{ history_url }}">
-                            <td><strong>{{ item.type_label }}</strong></td>
+                            {% if show_memory_analysis %}
+                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
+                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
+                            {% endif %}
                             <td>
-                                <a href="{{ history_url }}">{{ item.name }}</a>
-                            </td>
-                            <td>
-                                {% for key, value in item.items() %}
-                                    {% set ignored = ['name', 'price', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'id', 'price_per_gb', 'price/gb', 'value', 'deal_quality'] %}
-                                    {% if key.lower() not in ignored and value %}
-                                        <span class="spec-tag"><strong>{{ key.replace('_', ' ') }}:</strong> {{ value }}</span>
+                                <div class="product-name-cell">
+                                    <a href="{{ history_url }}">{{ item.name }}</a>
+                                    {% if item.spec_summary %}
+                                        <div class="build-slot-specs">{{ item.spec_summary }}</div>
                                     {% endif %}
-                                {% endfor %}
+                                </div>
                             </td>
-                            <td>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</td>
+                            <td>
+                                <div>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</div>
+                                <div class="price-snapshot-count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
+                            </td>
                             <td>
                                 <button
                                     type="button"
@@ -220,10 +231,6 @@
                                     Add
                                 </button>
                             </td>
-                            {% if show_memory_analysis %}
-                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
-                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
-                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
