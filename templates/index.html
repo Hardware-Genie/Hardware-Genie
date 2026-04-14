@@ -2,11 +2,33 @@
 {% block main %}
 <nav>
 <div class="header_block">    
-    <h1>Hardware Genie</h1>
-    <form action="/search" method="GET">
-        <input type="text" name="q" placeholder="Search for CPUs, GPUs, etc..." required>
-        <button type="submit">Search</button>
-    </form>
+    <div class="header_top">
+        <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
+    </div>
+    <div class="header_buttons">
+        {% if current_user.is_authenticated %}
+            <span class="header_button">{{ current_user.username }}</span>
+            <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+            <a class="header_button" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
+    <div class="header_tabs" aria-label="Main navigation tabs">
+        <details class="nav_dropdown">
+            <summary class="header_tab header_tab--dropdown">Products</summary>
+            <div class="nav_dropdown_menu" aria-label="Product categories">
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+            </div>
+        </details>
+        <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
+        <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+    </div>
 </div>
 </nav>
 <div class="main_block">
@@ -17,26 +39,52 @@
     </div>
     <table class="center">
         <tr>
-            <td><a href="{{ url_for('memory_page') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('memory_page') }}"><br>Memory</a></td>
-            <td><a href="{{ url_for('gpu_page') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('gpu_page') }}"><br>GPU</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='memory') }}" tabindex="0"><a href="{{ url_for('products', category='memory') }}"><image src="{{ url_for('static', filename='images/Ram_icon.png') }}" alt="Memory"></a><a href="{{ url_for('products', category='memory') }}"><br>Memory</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='video_card') }}" tabindex="0"><a href="{{ url_for('products', category='video_card') }}"><image src="{{ url_for('static', filename='images/GPU.png') }}" alt="GPU"></a><a href="{{ url_for('products', category='video_card') }}"><br>GPU</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='cpu') }}" tabindex="0"><a href="{{ url_for('products', category='cpu') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('products', category='cpu') }}"><br>CPU</a></td>
         </tr>
         <tr>
-            <td><a href="{{ url_for('cpu_page') }}"><image src="{{ url_for('static', filename='images/cpu.png') }}" alt="CPU"></a><a href="{{ url_for('cpu_page') }}"><br>CPU</a></td>
-            <td><a href="{{ url_for('storage_page') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('storage_page') }}"><br>Storage</a></td>
-        </tr>
-         <tr>
-            <td><a href="{{ url_for('motherboard_page') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a></td>
-            <td><a href="{{ url_for('powersupply_page') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='internal_hard_drive') }}" tabindex="0"><a href="{{ url_for('products', category='internal_hard_drive') }}"><image src="{{ url_for('static', filename='images/storage.png') }}" alt="Storage"></a><a href="{{ url_for('products', category='internal_hard_drive') }}"><br>Storage</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='motherboard') }}" tabindex="0"><a href="{{ url_for('products', category='motherboard') }}"><image src="{{ url_for('static', filename='images/motherboard.png') }}" alt="Motherboard"></a><a href="{{ url_for('products', category='motherboard') }}"><br>Motherboard</a></td>
+            <td class="category-cell" data-href="{{ url_for('products', category='power_supply') }}" tabindex="0"><a href="{{ url_for('products', category='power_supply') }}"><image src="{{ url_for('static', filename='images/powersupply.png') }}" alt="Power Supply"></a><a href="{{ url_for('products', category='power_supply') }}"><br>Power Supply</a></td>
         </tr>
     </table>
 </div>
 <p><br><br><br><br><br><br><br><br><br><br><br><br><br><br></p>   
 <div class="center">
     <h2>Scrape for a Part</h2>
+</div>
+<div class="center">
     <form action="{{ url_for('scraper') }}" method="post">
         <button type="submit">Go to Scraper</button>
     </form>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const categoryCells = document.querySelectorAll(".category-cell");
+
+    categoryCells.forEach((cell) => {
+        const targetUrl = cell.dataset.href;
+        if (!targetUrl) {
+            return;
+        }
+
+        cell.addEventListener("click", (event) => {
+            if (event.target.closest("a")) {
+                return;
+            }
+            window.location.href = targetUrl;
+        });
+
+        cell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                window.location.href = targetUrl;
+            }
+        });
+    });
+});
+</script>
 <footer>
     <p>&copy; 2026 Hardware Genie.</p>
 </footer>

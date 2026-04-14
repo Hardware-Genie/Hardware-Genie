@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block main %}
+<head>
+    <meta charset="UTF-8">
+    <title>Products - Hardware Genie</title>
+</head>
+<body>
+    <nav>
+        <div class="header_block">    
+            <div class="header_top">
+                <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
+            </div>
+            <div class="header_buttons">
+                {% if current_user.is_authenticated %}
+                    <p>Current User: {{ current_user.username }}</p>
+                    <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+                {% else %}
+                    <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+                    <a class="header_button" href="{{ url_for('login') }}">Login</a>
+                {% endif %}
+            </div>
+            <div class="header_tabs" aria-label="Main navigation tabs">
+                <details class="nav_dropdown">
+                    <summary class="header_tab header_tab--dropdown">Products</summary>
+                    <div class="nav_dropdown_menu" aria-label="Product categories">
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                        <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+                    </div>
+                </details>
+                <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
+                <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+            </div>
+        </div>
+    </nav>
+<div class="search-results-container">
+    <div class="search-toolbar">
+        <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
+        <form action="{{ url_for('products') }}" method="GET">
+            <input class="search-input" type="text" name="q" value="{{ query }}" placeholder="Search hardware...">
+            <button class="search-button" type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <!-- Sidebar Filters -->
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form action="{{ url_for('products') }}" method="GET" id="filterForm">
+                <input type="hidden" name="q" value="{{ query }}">
+                
+                <!-- Category Filter -->
+                <div class="filter-section">
+                    <details class="filter-collapsible" open>
+                        <summary class="filter-header">Category</summary>
+                        <div class="filter-options">
+                            {% set categories = [
+                                ('video_card', 'Video Card'),
+                                ('cpu', 'CPU'),
+                                ('power_supply', 'Power Supply'),
+                                ('motherboard', 'Motherboard'),
+                                ('memory', 'Memory'),
+                                ('internal_hard_drive', 'Internal Hard Drive')
+                            ] %}
+                            {% for val, label in categories %}
+                                <label class="filter-checkbox">
+                                    <input type="radio" name="category" value="{{ val }}" {% if active_filters.get('category') == val %}checked{% endif %}>
+                                    {{ label }}
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </details>
+                </div>
+
+                <div class="filter-section">
+                    <details class="filter-collapsible" open>
+                        <summary class="filter-header">Price Range</summary>
+                        <div class="filter-options">
+                            <label class="filter-checkbox">Min Price</label>
+                            <input type="number" name="min_price" min="0" step="0.01" value="{{ min_price if min_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.min) }}">
+                            <label class="filter-checkbox">Max Price</label>
+                            <input type="number" name="max_price" min="0" step="0.01" value="{{ max_price if max_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.max) }}">
+                        </div>
+                    </details>
+                </div>
+
+                {% if show_memory_analysis %}
+                    <div class="filter-section">
+                        <details class="filter-collapsible" open>
+                            <summary class="filter-header">Value Range</summary>
+                            <div class="filter-options">
+                                <label class="filter-checkbox">Min Value</label>
+                                <input type="number" name="min_value" min="0" step="0.001" value="{{ min_value if min_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.min) }}">
+                                <label class="filter-checkbox">Max Value</label>
+                                <input type="number" name="max_value" min="0" step="0.001" value="{{ max_value if max_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.max) }}">
+                            </div>
+                        </details>
+                    </div>
+                {% endif %}
+                
+                <!-- Other Filters -->
+                {% for spec_name, options in filter_options.items() %}
+                    <div class="filter-section">
+                        <details class="filter-collapsible">
+                            <summary class="filter-header">{{ filter_labels.get(spec_name, spec_name.replace('_', ' ').title()) }}</summary>
+                            <div class="filter-options">
+                                {% for opt in options %}
+                                    <label class="filter-checkbox">
+                                        <input type="checkbox" name="{{ spec_name }}" value="{{ opt }}" 
+                                            {% if spec_name in all_active_filters and opt in all_active_filters[spec_name] %}checked{% endif %}>
+                                        {{ opt }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </details>
+                    </div>
+                {% endfor %}
+                
+                <!-- Action Buttons -->
+                <div class="filter-actions">
+                    <button type="submit" class="apply-filters-btn">Apply Filters</button>
+                    <a href="{{ url_for('products', q=query) }}" class="reset-btn">Clear All</a>
+                </div>
+            </form>
+        </aside>
+
+        <!-- Results Table -->
+        <main class="main-content">
+            {% set start_page = [1, page - 2] | max %}
+            {% set end_page = [total_pages, start_page + 4] | min %}
+            {% set start_page = [1, end_page - 4] | max %}
+            {% set category_titles = {
+                'video_card': 'Video Cards',
+                'cpu': 'CPUs',
+                'power_supply': 'Power Supplies',
+                'motherboard': 'Motherboards',
+                'memory': 'Memory',
+                'internal_hard_drive': 'Hard Drives'
+            } %}
+            {% if selected_category %}
+                <h2>{{ category_titles.get(selected_category, selected_category.replace('_', ' ').title()) }}</h2>
+            {% elif query %}
+                <h2>Results for "{{ query }}"</h2>
+            {% else %}
+                <h2>All Products</h2>
+            {% endif %}
+            <p class="results-count">Showing {{ start_item }}-{{ end_item }} of {{ total_results }} products.</p>
+            
+            <!-- Sorting Control -->
+            <div class="sort-control">
+                <label for="sortSelect">Sort by:</label>
+                <select id="sortSelect" name="sort" onchange="updateSort(this.value)">
+                    <option value="alphabetical_asc" {% if sort_by == 'alphabetical_asc' or sort_by == 'relevance' %}selected{% endif %}>Alphabetical: A to Z</option>
+                    <option value="alphabetical_desc" {% if sort_by == 'alphabetical_desc' %}selected{% endif %}>Alphabetical: Z to A</option>
+                    <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price: Low to High</option>
+                    <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                    {% if show_memory_analysis %}
+                        <option value="value_best" {% if sort_by == 'value_best' %}selected{% endif %}>Best Value</option>
+                        <option value="value_worst" {% if sort_by == 'value_worst' %}selected{% endif %}>Worst Value</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            {% if total_pages > 1 %}
+                <div class="pager">
+                    {% if page > 1 %}
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                    {% endif %}
+
+                    {% for p in range(start_page, end_page + 1) %}
+                        {% if p == page %}
+                            <span class="current-page">{{ p }}</span>
+                        {% else %}
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {% if results %}
+                <table>
+                    <thead>
+                        <tr>
+                            {% if show_memory_analysis %}
+                                <th>Value</th>
+                                <th>Deal Quality</th>
+                            {% endif %}
+                            <th>Item Name</th>
+                            <th>Latest Price</th>
+                            <th>Add to Build</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in results %}
+                        {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
+                        
+                        <tr class="clickable-row" data-href="{{ history_url }}">
+                            {% if show_memory_analysis %}
+                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
+                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
+                            {% endif %}
+                            <td>
+                                <div class="product-name-cell">
+                                    <a href="{{ history_url }}">{{ item.name }}</a>
+                                    {% if item.spec_summary %}
+                                        <div class="build-slot-specs">{{ item.spec_summary }}</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</div>
+                                <div class="price-snapshot-count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
+                            </td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="add-to-build-btn"
+                                    data-category-key="{{ item.table_name }}"
+                                    data-category-label="{{ item.type_label }}"
+                                    data-name="{{ item.name }}"
+                                    data-price="{{ item.price if item.price is not none else '' }}"
+                                    data-specs="{{ item.spec_summary if item.spec_summary else '' }}"
+                                >
+                                    Add
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if total_pages > 1 %}
+                    <div class="pager">
+                        {% if page > 1 %}
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                        {% endif %}
+
+                        {% for p in range(start_page, end_page + 1) %}
+                            {% if p == page %}
+                                <span class="current-page">{{ p }}</span>
+                            {% else %}
+                                <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page < total_pages %}
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% else %}
+                <p>No components found matching your search and filters.</p>
+            {% endif %}
+        </main>
+    </div>
+</div>
+<script>
+const BUILD_STORAGE_KEY = 'hardwareGenieBuildList';
+
+function updateSort(sortValue) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('sort', sortValue);
+    params.set('page', '1');
+    window.location.href = '?' + params.toString();
+}
+
+function getSavedParts() {
+    try {
+        const raw = localStorage.getItem(BUILD_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function setSavedParts(parts) {
+    localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(parts));
+}
+
+function normalizePartsByCategory(parts) {
+    const categoryMap = {};
+    parts.forEach((part) => {
+        if (!part || !part.categoryKey) {
+            return;
+        }
+        categoryMap[part.categoryKey] = {
+            categoryKey: part.categoryKey,
+            categoryLabel: part.categoryLabel || part.categoryKey,
+            name: part.name || 'Unnamed part',
+            price: part.price,
+            specs: part.specs || '',
+        };
+    });
+    return categoryMap;
+}
+
+function parsePrice(value) {
+    const raw = String(value || '').replace('$', '').replace(',', '').trim();
+    if (!raw) {
+        return null;
+    }
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const BUILD_FLOW_KEY = 'hardwareGenieProductsFromBuild';
+    const params = new URLSearchParams(window.location.search);
+    const fromBuildParam = params.get('from_build') === '1';
+    let referrerPath = '';
+
+    try {
+        if (document.referrer) {
+            const referrerUrl = new URL(document.referrer);
+            if (referrerUrl.origin === window.location.origin) {
+                referrerPath = referrerUrl.pathname || '';
+            }
+        }
+    } catch (error) {
+        referrerPath = '';
+    }
+
+    const cameFromBuild = referrerPath === '{{ url_for("build_page") }}';
+    const cameFromProducts = referrerPath === '{{ url_for("products") }}' || referrerPath === '{{ url_for("search") }}';
+
+    if (fromBuildParam || cameFromBuild) {
+        sessionStorage.setItem(BUILD_FLOW_KEY, '1');
+    } else if (!cameFromProducts) {
+        sessionStorage.removeItem(BUILD_FLOW_KEY);
+    }
+
+    const inBuildFlow = sessionStorage.getItem(BUILD_FLOW_KEY) === '1';
+    const backButton = document.getElementById('productsBackButton');
+    if (backButton) {
+        backButton.href = inBuildFlow ? '{{ url_for("build_page") }}' : '{{ url_for("index") }}';
+    }
+
+    if (inBuildFlow) {
+        const categoryLinks = document.querySelectorAll('.nav_dropdown_item[href*="{{ url_for("products") }}"]');
+        categoryLinks.forEach((link) => {
+            try {
+                const target = new URL(link.href, window.location.origin);
+                target.searchParams.set('from_build', '1');
+                link.href = target.pathname + target.search;
+            } catch (error) {
+                // Ignore invalid links and keep original href.
+            }
+        });
+    }
+
+    const rows = document.querySelectorAll(".clickable-row");
+    rows.forEach(row => {
+        row.addEventListener("click", (e) => {
+            if (e.target.tagName !== 'A' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+                window.location.href = row.dataset.href;
+            }
+        });
+    });
+    
+    // Handle multiselect checkbox serialization
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams();
+            
+            // Add query and preserve sort parameter
+            const currentParams = new URLSearchParams(window.location.search);
+            if (currentParams.has('q')) {
+                params.append('q', currentParams.get('q'));
+            }
+            if (currentParams.has('sort')) {
+                params.append('sort', currentParams.get('sort'));
+            }
+            if (currentParams.has('from_build')) {
+                params.append('from_build', currentParams.get('from_build'));
+            }
+            
+            for (const [name, value] of formData.entries()) {
+                if (value !== '') {
+                    params.append(name, value);
+                }
+            }
+            
+            window.location.href = window.location.pathname + '?' + params.toString();
+        });
+    }
+
+    const addButtons = document.querySelectorAll('.add-to-build-btn');
+    let categoryMap = normalizePartsByCategory(getSavedParts());
+    setSavedParts(Object.values(categoryMap));
+
+    addButtons.forEach((button) => {
+        const categoryKey = button.dataset.categoryKey || '';
+        const partName = button.dataset.name || '';
+        const existing = categoryMap[categoryKey];
+
+        if (existing && existing.name === partName) {
+            button.textContent = 'Added';
+            button.disabled = true;
+            return;
+        }
+
+        if (existing && existing.name !== partName) {
+            button.textContent = 'Category Filled';
+            button.disabled = true;
+            return;
+        }
+    });
+
+    addButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            categoryMap = normalizePartsByCategory(getSavedParts());
+            const categoryKey = button.dataset.categoryKey || '';
+            const partName = button.dataset.name || '';
+            const existing = categoryMap[categoryKey];
+
+            if (existing && existing.name === partName) {
+                button.textContent = 'Added';
+                button.disabled = true;
+                return;
+            }
+
+            if (existing && existing.name !== partName) {
+                button.textContent = 'Category Filled';
+                button.disabled = true;
+                return;
+            }
+
+            categoryMap[categoryKey] = {
+                categoryKey: button.dataset.categoryKey || '',
+                categoryLabel: button.dataset.categoryLabel || 'Part',
+                name: button.dataset.name || 'Unnamed part',
+                price: parsePrice(button.dataset.price),
+                specs: button.dataset.specs || '',
+            };
+            setSavedParts(Object.values(categoryMap));
+            window.location.href = "{{ url_for('build_page') }}";
+        });
+    });
+});
+</script>
+</body>
+{% endblock %}

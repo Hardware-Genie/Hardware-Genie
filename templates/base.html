@@ -8,5 +8,44 @@
 <body>
 {% block main %}
 {% endblock %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const nav = document.querySelector('nav');
+    if (!nav) {
+        return;
+    }
+
+    const updateNavOffset = () => {
+        document.body.style.setProperty('--nav-offset', `${nav.offsetHeight}px`);
+    };
+
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+        const currentScrollY = window.scrollY;
+
+        if (currentScrollY <= 10) {
+            nav.classList.remove('nav--hidden');
+        } else if (currentScrollY > lastScrollY) {
+            nav.classList.add('nav--hidden');
+        } else if (currentScrollY < lastScrollY) {
+            nav.classList.remove('nav--hidden');
+        }
+
+        lastScrollY = currentScrollY;
+        ticking = false;
+    };
+
+    updateNavOffset();
+    window.addEventListener('resize', updateNavOffset);
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            window.requestAnimationFrame(handleScroll);
+            ticking = true;
+        }
+    }, { passive: true });
+});
+</script>
 </body>
 </html>

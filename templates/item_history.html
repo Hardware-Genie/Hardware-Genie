@@ -1,13 +1,39 @@
 {% extends 'base.html' %}
 {% block main %}
-<head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet"  type="text/css" href="{{ url_for('.static', filename='style.css')}} ">
-    <title>Price History - {{ name }}</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <a href="javascript:history.back()">← Back</a>
+<nav>
+<div class="header_block">
+    <div class="header_top">
+        <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
+    </div>
+    <div class="header_buttons">
+        {% if current_user.is_authenticated %}
+            <span class="header_button">{{ current_user.username }}</span>
+            <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+            <a class="header_button" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
+    <div class="header_tabs" aria-label="Main navigation tabs">
+        <details class="nav_dropdown">
+            <summary class="header_tab header_tab--dropdown">Products</summary>
+            <div class="nav_dropdown_menu" aria-label="Product categories">
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+            </div>
+        </details>
+        <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
+        <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+    </div>
+</div>
+</nav>
+
+<div class="main-content" style="margin: 20px;">
+    <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
     <h1>Price History: {{ name }}</h1>
     <h1>{{ specs.name }}</h1>
     <div class="specs-banner">
@@ -17,14 +43,15 @@
             {% endif %}
         {% endfor %}
     </div>
-    <!-- 1. The Chart Container -->
     <div style="width: 50%; margin: auto;">
         <canvas id="priceChart"></canvas>
     </div>
 
+    <script id="history-data" type="application/json">{{ {'labels': dates, 'prices': prices}|tojson }}</script>
+
     <hr>
 
-    <!-- 2. The Table -->
+    <p>Price history for {{ name }}:</p>
     <table border="1">
         <thead>
             <tr><th>Date</th><th>Price</th></tr>
@@ -39,16 +66,14 @@
         </tbody>
     </table>
 
-    <!-- 3. The Chart Script -->
-     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const ctx = document.getElementById('priceChart').getContext('2d');
-            
-            // Parse the JSON data passed from Flask
-            const labels = {{ dates|safe }};
-            const data = {{ prices|safe }};
+            const historyDataElement = document.getElementById('history-data');
+            const historyData = historyDataElement ? JSON.parse(historyDataElement.textContent || '{}') : {};
+            const labels = Array.isArray(historyData.labels) ? historyData.labels : [];
+            const data = Array.isArray(historyData.prices) ? historyData.prices : [];
 
             new Chart(ctx, {
                 type: 'line',
@@ -78,5 +103,5 @@
             });
         });
     </script>
-</body>
+</div>
 {% endblock %}

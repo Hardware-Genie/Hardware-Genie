@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% block main %}
+<nav>
+<div class="header_block">
+	<div class="header_top">
+		<a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
+	</div>
+	<div class="header_buttons">
+		{% if current_user.is_authenticated %}
+			<span class="header_button">{{ current_user.username }}</span>
+			<a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+		{% else %}
+			<a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+			<a class="header_button" href="{{ url_for('login') }}">Login</a>
+		{% endif %}
+	</div>
+	<div class="header_tabs" aria-label="Main navigation tabs">
+		<details class="nav_dropdown">
+			<summary class="header_tab header_tab--dropdown">Products</summary>
+			<div class="nav_dropdown_menu" aria-label="Product categories">
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+				<a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+			</div>
+		</details>
+		<a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
+		<a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+	</div>
+</div>
+</nav>
+
+<div class="main-content" style="margin: 20px;">
+	<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+		<h2 style="margin: 0;">Price Trends by Category</h2>
+		<button id="trend-view-toggle" type="button" style="padding: 8px 12px; border: 1px solid #38635a; background: #ffffff; color: #38635a; border-radius: 6px; cursor: pointer; font-weight: 600;">
+			Show Average Only
+		</button>
+	</div>
+	<p>Each chart shows min/max price ranges by snapshot date with the average shown as a centered marker bar.</p>
+
+	{% for category in trend_data %}
+		<section style="margin: 24px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+			<h3 style="margin-top: 0;">{{ category.label }}</h3>
+			{% if category.labels and category.prices %}
+				<canvas id="trendChart-{{ category.key }}" style="max-height: 360px;"></canvas>
+			{% else %}
+				<p>No trend data available for this category yet.</p>
+			{% endif %}
+		</section>
+	{% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="trend-data" type="application/json">{{ trend_data|tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+	const trendDataElement = document.getElementById('trend-data');
+	const toggleButton = document.getElementById('trend-view-toggle');
+	const trendData = trendDataElement ? JSON.parse(trendDataElement.textContent || '[]') : [];
+	let showRangeMode = true;
+	const chartEntries = [];
+
+	const buildAverageOnlyDataset = (category) => ([{
+		type: 'line',
+		label: `${category.label} Average Price ($)`,
+		data: category.prices,
+		borderColor: 'rgb(56, 99, 90)',
+		backgroundColor: 'rgba(56, 99, 90, 0.18)',
+		fill: true,
+		tension: 0.25,
+		pointRadius: 1.5,
+		borderWidth: 2,
+		order: 0,
+	}]);
+
+	const buildRangeDatasets = (category) => {
+		const minPrices = Array.isArray(category.min_prices) ? category.min_prices : [];
+		const maxPrices = Array.isArray(category.max_prices) ? category.max_prices : [];
+		const lowerSection = category.labels.map((_, idx) => {
+			const minValue = Number.isFinite(minPrices[idx]) ? minPrices[idx] : category.prices[idx];
+			const maxValue = Number.isFinite(maxPrices[idx]) ? maxPrices[idx] : category.prices[idx];
+			const avgValue = Number.isFinite(category.prices[idx]) ? category.prices[idx] : minValue;
+			const low = Math.min(minValue, maxValue);
+			const high = Math.max(minValue, maxValue);
+			const avgClamped = Math.min(high, Math.max(low, avgValue));
+			return [low, avgClamped];
+		});
+
+		const averageSection = category.labels.map((_, idx) => {
+			const minValue = Number.isFinite(minPrices[idx]) ? minPrices[idx] : category.prices[idx];
+			const maxValue = Number.isFinite(maxPrices[idx]) ? maxPrices[idx] : category.prices[idx];
+			const avgValue = Number.isFinite(category.prices[idx]) ? category.prices[idx] : minValue;
+			const low = Math.min(minValue, maxValue);
+			const high = Math.max(minValue, maxValue);
+			const avgClamped = Math.min(high, Math.max(low, avgValue));
+			const totalSpan = Math.abs(high - low);
+			const bandHalfHeight = Math.max(totalSpan * 0.01, 0.5);
+			const avgLower = Math.max(low, avgClamped - bandHalfHeight);
+			const avgUpper = Math.min(high, avgClamped + bandHalfHeight);
+			return [avgLower, avgUpper];
+		});
+
+		const upperSection = category.labels.map((_, idx) => {
+			const minValue = Number.isFinite(minPrices[idx]) ? minPrices[idx] : category.prices[idx];
+			const maxValue = Number.isFinite(maxPrices[idx]) ? maxPrices[idx] : category.prices[idx];
+			const avgValue = Number.isFinite(category.prices[idx]) ? category.prices[idx] : minValue;
+			const low = Math.min(minValue, maxValue);
+			const high = Math.max(minValue, maxValue);
+			const avgClamped = Math.min(high, Math.max(low, avgValue));
+			return [avgClamped, high];
+		});
+
+		return [
+			{
+				label: 'Min to Average',
+				data: lowerSection,
+				backgroundColor: 'rgba(164, 192, 138, .5)',
+				borderColor: 'rgba(164, 192, 138, 1)',
+				borderWidth: 0,
+				barPercentage: 1.0,
+				categoryPercentage: 1.0,
+				grouped: false,
+				order: 2,
+			},
+			{
+				label: 'Average',
+				data: averageSection,
+				backgroundColor: 'rgba(56, 99, 90, 1)',
+				borderColor: 'rgba(56, 99, 90, 1)',
+				borderWidth: 0,
+				barPercentage: 1.0,
+				categoryPercentage: 1.0,
+				grouped: false,
+				order: 1,
+			},
+			{
+				label: 'Average to Max',
+				data: upperSection,
+				backgroundColor: 'rgba(101, 145, 118, .5)',
+				borderColor: 'rgba(101, 145, 118, 1)',
+				borderWidth: 0,
+				barPercentage: 1.0,
+				categoryPercentage: 1.0,
+				grouped: false,
+				order: 0,
+			}
+		];
+	};
+
+	trendData.forEach((category) => {
+		if (!category.labels || !category.labels.length || !category.prices || !category.prices.length) {
+			return;
+		}
+
+		const canvas = document.getElementById(`trendChart-${category.key}`);
+		if (!canvas) {
+			return;
+		}
+
+		const chart = new Chart(canvas.getContext('2d'), {
+			type: 'bar',
+			data: {
+				labels: category.labels,
+				datasets: buildRangeDatasets(category)
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				elements: {
+					bar: {
+						borderSkipped: false
+					}
+				},
+				scales: {
+					y: {
+						title: {
+							display: true,
+							text: 'Average Price ($)'
+						}
+					},
+					x: {
+						title: {
+							display: true,
+							text: 'Snapshot Date'
+						}
+					}
+				},
+				plugins: {
+					tooltip: {
+						callbacks: {
+							label: (context) => {
+								if (!showRangeMode) {
+									return `Average: $${Number(context.parsed.y || 0).toFixed(2)}`;
+								}
+								const [startValue, endValue] = context.raw || [];
+								const low = Number(Math.min(startValue || 0, endValue || 0));
+								const high = Number(Math.max(startValue || 0, endValue || 0));
+								if (context.dataset.label === 'Average') {
+									const avgValue = Number.isFinite(category.prices[context.dataIndex]) ? category.prices[context.dataIndex] : 0;
+									return `Average: $${avgValue.toFixed(2)}`;
+								}
+								return `${context.dataset.label}: $${low.toFixed(2)} - $${high.toFixed(2)}`;
+							},
+							afterLabel: (context) => {
+								const idx = context.dataIndex;
+								const sampled = category.sample_counts && category.sample_counts[idx] ? category.sample_counts[idx] : 0;
+								return `Products sampled: ${sampled}`;
+							}
+						}
+					}
+				}
+			}
+		});
+
+		chartEntries.push({ chart, category });
+	});
+
+	if (toggleButton) {
+		toggleButton.addEventListener('click', () => {
+			showRangeMode = !showRangeMode;
+			toggleButton.textContent = showRangeMode ? 'Show Average Only' : 'Show Range + Average';
+
+			chartEntries.forEach(({ chart, category }) => {
+				chart.config.type = showRangeMode ? 'bar' : 'line';
+				chart.data.datasets = showRangeMode ? buildRangeDatasets(category) : buildAverageOnlyDataset(category);
+				chart.update();
+			});
+		});
+	}
+});
+</script>
+{% endblock %}

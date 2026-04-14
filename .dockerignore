@@ -1,0 +1,5 @@
+.git
+.venv
+.vent
+part_memory_analysis/
+templates/old_templates/
