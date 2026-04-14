@@ -1,75 +1,158 @@
-body {
-  background-color: lightgray;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: medium;
-  margin: 0px;
+:root {
+  --primary-bg-color: white;
+  --primary-color: rgb(56,99,90);
 }
 
+/* Updated Body with New Styles */
+body { 
+  font-family: sans-serif; 
+  margin: 0px; 
+  background-color: #f4f4f9; 
+}
+
+/* Original Header & Nav Elements */
 h1 {
   color: rgb(0, 0, 0);
   margin-left: 20px;
 }
 
-table, th, td {
-  border: 1px solid;
-  padding: 5px
-}
-
-th {
-  background-color: darkcyan;
-  color: white
-}
-
-input[type=submit] {
-  background-color: darkcyan;
-  color: white;
-}
-
-nav {
-  background-color: darkcyan;
+nav, footer, .header_block {
+  background-color: var(--primary-color);
   color: white;
   padding: 10px;
   margin: 0;
 }
 
-.odd_row {
-  background-color: white;
+/* Updated Table Styles */
+table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  margin-top: 20px; 
 }
 
-.even_row {
-  background-color: lightgray;
+th, td { 
+  text-align: left; 
+  padding: 12px; 
+  border-bottom: 1px solid #ddd; 
+  border: 1px solid #ddd; /* Kept border from old style but updated color */
 }
 
-.button {
+th { 
+  background-color: #eee; 
+  color: black; /* Updated to match new theme */
+}
+
+tr:hover { 
+  background-color: #f9f9f9; 
+}
+
+/* New Sidebar & Layout Containers */
+.container { display: flex; gap: 20px; }
+
+.sidebar { 
+  width: 250px; 
+  background: white; 
+  padding: 20px; 
+  border-radius: 8px; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+  height: fit-content; 
+}
+
+.filter-group { 
+  margin-bottom: 15px; 
+  border-bottom: 1px solid #eee; 
+  padding-bottom: 10px; 
+}
+
+.filter-group label { 
+  display: block; 
+  font-weight: bold; 
+  margin-bottom: 5px; 
+  font-size: 0.9em; 
+  text-transform: capitalize; 
+}
+
+select { 
+  width: 100%; 
+  padding: 5px; 
+  border-radius: 4px; 
+  border: 1px solid #ccc; 
+}
+
+.main-content { 
+  flex-grow: 1; 
+  background: white; 
+  padding: 20px; 
+  border-radius: 8px; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+}
+
+/* Original Utility & Button Classes */
+.odd_row { background-color: white; }
+.even_row { background-color: lightgray; }
+
+.button, input[type=submit] {
   background-color: darkcyan;
   color: white;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
 }
 
-.button2{
+.button2, .button:disabled {
   background-color: gray;
   color: white;
-}
-
-.button:disabled {
-  background-color: gray;
-  color: white;
-}
-
-.header_block {
-  background-color: darkcyan;
-  color: white;
-  margin: 0;
-  padding: 10px;
 }
 
 .main_block {
-  background-color: lightgray;
+  background-color: var(--primary-bg-color);
   padding: 10px;
   text-align: center;
 }
 
-.center{
+.center {
   margin-left: auto;
   margin-right: auto;
-  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+/* New Decorative Elements */
+.spec-tag { 
+  display: inline-block; 
+  background: #e0e7ff; 
+  color: #4338ca; 
+  padding: 2px 6px; 
+  border-radius: 4px; 
+  font-size: 0.8em; 
+  margin: 2px; 
+}
+
+.reset-btn { 
+  display: block; 
+  margin-top: 10px; 
+  color: #dc2626; 
+  text-decoration: none; 
+  font-size: 0.9em; 
+}
+
+.clickable-row {
+   cursor: pointer;
+  transition: background 0.2s; 
+}
+.clickable-row:hover { 
+  background-color: #f1f5f9; 
+}
+.clickable-row a { 
+  text-decoration: none;
+  color: #2563eb; 
+  font-weight: bold;
+}
+.search-results-container {
+  
+  margin: auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
