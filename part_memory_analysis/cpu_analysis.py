@@ -1,3 +1,8 @@
+# List of columns to add when displaying on website
+# "Number of Cores" which can be called from ["core_count"]
+# "Integrated Graphics" which can be called from ["graphics_status"]
+# "Boost Ability" which can be called from ["boost_status"]
+
 import pandas as pd
 import re
 
