@@ -1,36 +1,6 @@
 {% extends "base.html" %}
 {% block main %}
-<nav>
-    <div class="header_block">
-        <div class="header_top">
-            <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
-        </div>
-        <div class="header_buttons">
-            {% if current_user.is_authenticated %}
-                <p>Current User: {{ current_user.username }}</p>
-                <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
-            {% else %}
-                <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
-                <a class="header_button" href="{{ url_for('login') }}">Login</a>
-            {% endif %}
-        </div>
-        <div class="header_tabs" aria-label="Main navigation tabs">
-            <details class="nav_dropdown">
-                <summary class="header_tab header_tab--dropdown">Products</summary>
-                <div class="nav_dropdown_menu" aria-label="Product categories">
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
-                </div>
-            </details>
-            <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
-            <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
-        </div>
-    </div>
-</nav>
+{% include 'partials/header.html' %}
 
 <section class="build-page" data-is-authenticated="{{ '1' if current_user.is_authenticated else '0' }}">
     <div class="build-page__topbar">
@@ -114,6 +84,7 @@ const saveBuildMessage = document.getElementById('saveBuildMessage');
 const saveBuildNameInput = document.getElementById('saveBuildNameInput');
 const confirmSaveBuildButton = document.getElementById('confirmSaveBuildButton');
 const cancelSaveBuildButton = document.getElementById('cancelSaveBuildButton');
+const initialBuildId = new URLSearchParams(window.location.search).get('build_id');
 
 function getSavedParts() {
     try {
@@ -135,6 +106,147 @@ function formatPrice(value) {
         return 'N/A';
     }
     return `$${numeric.toFixed(2)}`;
+}
+
+function parseSpecsMap(specText) {
+    const map = {};
+    if (!specText) {
+        return map;
+    }
+
+    String(specText)
+        .split('|')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .forEach((segment) => {
+            const separatorIndex = segment.indexOf(':');
+            if (separatorIndex === -1) {
+                return;
+            }
+
+            const rawKey = segment.slice(0, separatorIndex).trim().toLowerCase();
+            const rawValue = segment.slice(separatorIndex + 1).trim();
+            if (!rawKey || !rawValue) {
+                return;
+            }
+
+            map[rawKey] = rawValue;
+        });
+
+    return map;
+}
+
+function toGb(value, unit) {
+    if (unit === 'TB') {
+        return value * 1024;
+    }
+    return value;
+}
+
+function parseModulesSpec(modulesText) {
+    if (!modulesText) {
+        return null;
+    }
+
+    const text = String(modulesText).trim();
+    let moduleMatch = text.match(/(\d+)\s*[xX]\s*(\d+(?:\.\d+)?)\s*(TB|GB)?/i);
+
+    if (!moduleMatch) {
+        moduleMatch = text.match(/^\s*(\d+)\s*,\s*(\d+(?:\.\d+)?)\s*(TB|GB)?\s*$/i);
+    }
+
+    if (!moduleMatch) {
+        const numbers = text.match(/\d+(?:\.\d+)?/g);
+        if (!numbers || numbers.length < 2) {
+            return null;
+        }
+
+        const inferredUnitMatch = text.match(/(TB|GB)/i);
+        moduleMatch = [text, numbers[0], numbers[1], inferredUnitMatch ? inferredUnitMatch[1] : 'GB'];
+    }
+
+    const moduleCount = Number.parseInt(moduleMatch[1], 10);
+    const moduleSize = Number.parseFloat(moduleMatch[2]);
+    const moduleUnit = (moduleMatch[3] || 'GB').toUpperCase();
+
+    if (!Number.isFinite(moduleCount) || !Number.isFinite(moduleSize)) {
+        return null;
+    }
+
+    const moduleSizeGb = toGb(moduleSize, moduleUnit);
+    return {
+        moduleCount: moduleCount,
+        moduleSizeGb: moduleSizeGb,
+        totalMemoryGb: moduleCount * moduleSizeGb,
+    };
+}
+
+function parseFirstInteger(value) {
+    if (!value) {
+        return null;
+    }
+
+    const numberMatch = String(value).match(/\d+/);
+    if (!numberMatch) {
+        return null;
+    }
+
+    const parsed = Number.parseInt(numberMatch[0], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseMemoryCapacityGb(value) {
+    if (!value) {
+        return null;
+    }
+
+    const capacityMatch = String(value).match(/(\d+(?:\.\d+)?)\s*(TB|GB)?/i);
+    if (!capacityMatch) {
+        return null;
+    }
+
+    const numeric = Number.parseFloat(capacityMatch[1]);
+    if (!Number.isFinite(numeric)) {
+        return null;
+    }
+
+    const unit = (capacityMatch[2] || 'GB').toUpperCase();
+    return toGb(numeric, unit);
+}
+
+function buildCompatibilityWarnings(categoryMap) {
+    const warnings = {};
+    const memoryPart = categoryMap.memory;
+    const motherboardPart = categoryMap.motherboard;
+
+    if (!memoryPart || !motherboardPart) {
+        return warnings;
+    }
+
+    const memorySpecs = parseSpecsMap(memoryPart.specs);
+    const motherboardSpecs = parseSpecsMap(motherboardPart.specs);
+    const modules = parseModulesSpec(memorySpecs.modules);
+    const memorySlots = parseFirstInteger(motherboardSpecs['memory slots']);
+    const maxMemoryGb = parseMemoryCapacityGb(motherboardSpecs['max memory']);
+
+    const reasons = [];
+
+    if (modules && Number.isFinite(memorySlots) && modules.moduleCount > memorySlots) {
+        reasons.push(`Needs ${modules.moduleCount} memory slots, but motherboard has ${memorySlots}.`);
+    }
+
+    if (modules && Number.isFinite(maxMemoryGb) && modules.totalMemoryGb > maxMemoryGb) {
+        reasons.push(`Kit totals ${modules.totalMemoryGb}GB (${modules.moduleCount} x ${modules.moduleSizeGb}GB), but motherboard max memory is ${maxMemoryGb}GB.`);
+    }
+
+    if (!reasons.length) {
+        return warnings;
+    }
+
+    const warningText = `Incompatible with Motherboard: ${reasons.join(' ')}`;
+    warnings.memory = warningText;
+    warnings.motherboard = warningText;
+    return warnings;
 }
 
 function normalizePartsByCategory(parts) {
@@ -293,8 +405,8 @@ async function openBuildLibrary() {
     populateBuildLibraryOptions(Array.isArray(builds) ? builds : []);
 }
 
-async function loadSelectedBuild() {
-    const buildId = savedBuildSelect.value;
+async function loadSelectedBuild(buildIdOverride) {
+    const buildId = buildIdOverride || savedBuildSelect.value;
     if (!buildId) {
         return;
     }
@@ -319,6 +431,7 @@ async function loadSelectedBuild() {
 
 function renderSavedList() {
     const categoryMap = normalizePartsByCategory(getSavedParts());
+    const compatibilityWarnings = buildCompatibilityWarnings(categoryMap);
     persistNormalizedParts(categoryMap);
 
     let total = 0;
@@ -374,6 +487,14 @@ function renderSavedList() {
             specs.className = 'build-slot-specs';
             specs.textContent = selectedPart.specs;
             detailsWrap.appendChild(specs);
+        }
+
+        const incompatibilityMessage = compatibilityWarnings[categoryKey];
+        if (incompatibilityMessage) {
+            const warning = document.createElement('p');
+            warning.className = 'build-slot-warning';
+            warning.textContent = incompatibilityMessage;
+            detailsWrap.appendChild(warning);
         }
 
         const removeBtn = document.createElement('button');
@@ -453,6 +574,16 @@ if (saveBuildNameInput) {
             });
         }
     });
+}
+
+if (initialBuildId) {
+    if (!IS_AUTHENTICATED) {
+        window.location.href = "{{ url_for('login') }}";
+    } else {
+        loadSelectedBuild(initialBuildId).catch(() => {
+            window.alert('Unable to load the requested build.');
+        });
+    }
 }
 </script>
 {% endblock %}

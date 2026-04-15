@@ -11,7 +11,7 @@ import json
 import re
 from urllib.parse import urlencode
 
-from app.forms import LoginForm, SignupForm, WebsiteToScrape
+from app.forms import LoginForm, SignupForm, WebsiteToScrape, ProfileForm
 from app.models import User, SavedBuild
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
@@ -362,6 +362,72 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ProfileForm()
+    profile_updated = request.args.get('updated', '0') == '1'
+    duplicate_username = False
+    duplicate_email = False
+
+    if form.validate_on_submit():
+        username = (form.username.data or '').strip()
+        email = (form.email.data or '').strip().lower()
+
+        if not username:
+            form.username.errors.append('Username is required.')
+        if not email:
+            form.email.errors.append('Email is required.')
+
+        if username and username != current_user.username:
+            existing_username = db.session.execute(
+                db.select(User).filter(User.username == username, User.id != current_user.id)
+            ).scalar_one_or_none()
+            duplicate_username = existing_username is not None
+
+        if email and email != current_user.email:
+            existing_email = db.session.execute(
+                db.select(User).filter(User.email == email, User.id != current_user.id)
+            ).scalar_one_or_none()
+            duplicate_email = existing_email is not None
+
+        if duplicate_username:
+            form.username.errors.append('Username already exists. Please choose another one.')
+        if duplicate_email:
+            form.email.errors.append('Email already exists. Please choose another one.')
+
+        if not form.errors:
+            current_user.username = username
+            current_user.email = email
+
+            new_password = form.new_password.data or ''
+            if new_password.strip():
+                current_user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+
+            db.session.commit()
+            return redirect(url_for('profile', updated=1))
+
+    elif request.method == 'GET':
+        form.username.data = current_user.username
+        form.email.data = current_user.email
+
+    saved_builds = (
+        SavedBuild.query
+        .filter_by(user_id=current_user.id)
+        .order_by(SavedBuild.updated_at.desc(), SavedBuild.id.desc())
+        .all()
+    )
+
+    return render_template(
+        'profile.html',
+        form=form,
+        profile_updated=profile_updated,
+        duplicate_username=duplicate_username,
+        duplicate_email=duplicate_email,
+        saved_builds=saved_builds,
+    )
 
 @app.route('/scraper', methods=['GET', 'POST'])
 def scraper():
@@ -735,10 +801,16 @@ def saved_builds_api():
     }), 201
 
 
-@app.route('/api/builds/<int:build_id>', methods=['GET'])
+@app.route('/api/builds/<int:build_id>', methods=['GET', 'DELETE'])
 @login_required
 def saved_build_detail(build_id):
     saved_build = SavedBuild.query.filter_by(id=build_id, user_id=current_user.id).first_or_404()
+
+    if request.method == 'DELETE':
+        db.session.delete(saved_build)
+        db.session.commit()
+        return jsonify({'status': 'deleted', 'id': build_id})
+
     return jsonify({
         'id': saved_build.id,
         'build_name': saved_build.build_name,

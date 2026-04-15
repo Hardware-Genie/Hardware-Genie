@@ -5,37 +5,7 @@
     <title>Products - Hardware Genie</title>
 </head>
 <body>
-    <nav>
-        <div class="header_block">    
-            <div class="header_top">
-                <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
-            </div>
-            <div class="header_buttons">
-                {% if current_user.is_authenticated %}
-                    <p>Current User: {{ current_user.username }}</p>
-                    <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
-                {% else %}
-                    <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
-                    <a class="header_button" href="{{ url_for('login') }}">Login</a>
-                {% endif %}
-            </div>
-            <div class="header_tabs" aria-label="Main navigation tabs">
-                <details class="nav_dropdown">
-                    <summary class="header_tab header_tab--dropdown">Products</summary>
-                    <div class="nav_dropdown_menu" aria-label="Product categories">
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
-                    </div>
-                </details>
-                <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
-                <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'partials/header.html' %}
 <div class="search-results-container">
     <div class="search-toolbar">
         <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
@@ -188,11 +158,10 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>Item Name</th>
                             {% if show_memory_analysis %}
                                 <th>Value</th>
-                                <th>Deal Quality</th>
                             {% endif %}
-                            <th>Item Name</th>
                             <th>Latest Price</th>
                             <th>Add to Build</th>
                         </tr>
@@ -202,10 +171,6 @@
                         {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
                         
                         <tr class="clickable-row" data-href="{{ history_url }}">
-                            {% if show_memory_analysis %}
-                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
-                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
-                            {% endif %}
                             <td>
                                 <div class="product-name-cell">
                                     <a href="{{ history_url }}">{{ item.name }}</a>
@@ -214,6 +179,10 @@
                                     {% endif %}
                                 </div>
                             </td>
+                            {% if show_memory_analysis %}
+                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
+                                
+                            {% endif %}
                             <td>
                                 <div>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</div>
                                 <div class="price-snapshot-count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>

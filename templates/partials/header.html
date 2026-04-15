@@ -1,0 +1,31 @@
+<nav>
+    <div class="header_block">
+        <div class="header_top">
+            <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
+        </div>
+        <div class="header_buttons">
+            {% if current_user.is_authenticated %}
+                <a class="header_button header_button--secondary" href="{{ url_for('profile') }}">Profile</a>
+                <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
+            {% else %}
+                <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
+                <a class="header_button" href="{{ url_for('login') }}">Login</a>
+            {% endif %}
+        </div>
+        <div class="header_tabs" aria-label="Main navigation tabs">
+            <details class="nav_dropdown">
+                <summary class="header_tab header_tab--dropdown">Products</summary>
+                <div class="nav_dropdown_menu" aria-label="Product categories">
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+                </div>
+            </details>
+            <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
+            <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+        </div>
+    </div>
+</nav>

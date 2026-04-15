@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block main %}
+{% include 'partials/header.html' %}
+
+<section class="profile-page">
+    <div class="profile-grid">
+        <article class="profile-card">
+            <h2 class="profile-title">Your Profile</h2>
+            {% if profile_updated %}
+                <p class="profile-success">Profile updated successfully.</p>
+            {% endif %}
+
+            <form class="profile-form" method="POST" action="{{ url_for('profile') }}">
+                {{ form.csrf_token }}
+
+                <label class="auth-label" for="username">Username</label>
+                <input class="auth-input" type="text" id="username" name="username" value="{{ form.username.data or '' }}" required>
+                {% for error in form.username.errors %}
+                    <p class="auth-error">{{ error }}</p>
+                {% endfor %}
+
+                <label class="auth-label" for="email">Email</label>
+                <input class="auth-input" type="email" id="email" name="email" value="{{ form.email.data or '' }}" required>
+                {% for error in form.email.errors %}
+                    <p class="auth-error">{{ error }}</p>
+                {% endfor %}
+
+                <label class="auth-label" for="new_password">New Password (optional)</label>
+                <input class="auth-input" type="password" id="new_password" name="new_password" minlength="8">
+
+                <label class="auth-label" for="confirm_new_password">Confirm New Password</label>
+                <input class="auth-input" type="password" id="confirm_new_password" name="confirm_new_password" minlength="8">
+                {% for error in form.confirm_new_password.errors %}
+                    <p class="auth-error">{{ error }}</p>
+                {% endfor %}
+                {% for error in form.new_password.errors %}
+                    <p class="auth-error">{{ error }}</p>
+                {% endfor %}
+
+                <div class="auth-actions">
+                    <a class="back-button" href="{{ url_for('index') }}">Back</a>
+                    <button class="auth-submit" type="submit">Save Changes</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="profile-card">
+            <div class="profile-builds-head">
+                <h2 class="profile-title">Saved Builds</h2>
+                <a class="build-action-btn build-action-btn--secondary" href="{{ url_for('build_page') }}">Create New Build</a>
+            </div>
+
+            {% if saved_builds %}
+                <div class="profile-build-list" id="profileBuildList">
+                    {% for build in saved_builds %}
+                        <div class="profile-build-item" data-build-id="{{ build.id }}">
+                            <div>
+                                <p class="profile-build-name">{{ build.build_name }}</p>
+                                <p class="profile-build-meta">
+                                    {{ (build.build_data or [])|length }} item{% if ((build.build_data or [])|length) != 1 %}s{% endif %}
+                                    · Updated {{ build.updated_at.strftime('%Y-%m-%d %H:%M') if build.updated_at else 'Unknown' }}
+                                </p>
+                            </div>
+                            <div class="profile-build-actions">
+                                <a class="apply-filters-btn build-slot-action" href="{{ url_for('build_page', build_id=build.id) }}">Open Build</a>
+                                <button type="button" class="build-remove-btn profile-delete-build" data-build-id="{{ build.id }}">Delete</button>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="build-list-empty" id="emptyBuildMessage">No saved builds yet. Save one from the Build page.</p>
+            {% endif %}
+        </article>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const buildList = document.getElementById('profileBuildList');
+    const emptyMessage = document.getElementById('emptyBuildMessage');
+    const deleteButtons = document.querySelectorAll('.profile-delete-build');
+
+    deleteButtons.forEach((button) => {
+        button.addEventListener('click', async () => {
+            const buildId = button.dataset.buildId;
+            if (!buildId) {
+                return;
+            }
+
+            const confirmed = window.confirm('Delete this saved build? This cannot be undone.');
+            if (!confirmed) {
+                return;
+            }
+
+            button.disabled = true;
+            const response = await fetch(`{{ url_for('saved_builds_api') }}/${buildId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                button.disabled = false;
+                window.alert('Unable to delete build. Please try again.');
+                return;
+            }
+
+            const row = button.closest('.profile-build-item');
+            if (row) {
+                row.remove();
+            }
+
+            if (buildList && buildList.children.length === 0 && emptyMessage) {
+                emptyMessage.style.display = 'block';
+            }
+
+            if (buildList && buildList.children.length === 0 && !emptyMessage) {
+                const msg = document.createElement('p');
+                msg.className = 'build-list-empty';
+                msg.textContent = 'No saved builds yet. Save one from the Build page.';
+                buildList.insertAdjacentElement('afterend', msg);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
