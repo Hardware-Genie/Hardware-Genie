@@ -1,5 +1,31 @@
 .git
-.venv
-.vent
+.gitignore
+
+# Python virtual environments and caches
+.venv/
+.vent/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Terraform artifacts and local state
+infra/**/.terraform/
+infra/**/.terraform.lock.hcl
+infra/**/terraform.tfstate
+infra/**/terraform.tfstate.*
+
+# Local app/runtime artifacts
+instance/
+*.db
+
+# Data and analysis folders not required in runtime image
 part_memory_analysis/
 templates/old_templates/
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+.vscode/

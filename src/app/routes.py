@@ -1,5 +1,6 @@
 
 from logging import exception
+from bisect import bisect_right
 
 from flask import Flask, render_template, jsonify, redirect, url_for, request
 from sqlalchemy import inspect, text
@@ -145,8 +146,6 @@ FILTER_LABEL_OVERRIDES = {
     'form_factor': 'Form Factor',
 }
 
-ANALYSIS_VALUE_CATEGORIES = {'memory', 'power_supply'}
-
 BUILD_TABLE_LABELS = {
     'cpu': 'CPU',
     'memory': 'Memory',
@@ -171,6 +170,19 @@ def _safe_parse_price(value):
         return float(str(value).replace('$', '').replace(',', '').strip())
     except (TypeError, ValueError):
         return None
+
+
+def _percentile_rank(sorted_values, value):
+    if value is None or not sorted_values:
+        return None
+
+    total_values = len(sorted_values)
+    if total_values == 1:
+        return 100.0
+
+    rank_index = bisect_right(sorted_values, value) - 1
+    rank_index = max(0, min(rank_index, total_values - 1))
+    return (rank_index / (total_values - 1)) * 100.0
 
 
 def _build_category_items(table_name):
@@ -480,6 +492,7 @@ def search():
     filter_options = {}
     price_range = {'min': float('inf'), 'max': 0}
     value_range = {'min': float('inf'), 'max': 0}
+    value_samples_by_table = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
@@ -555,6 +568,15 @@ def search():
             if not item_matches_active_filters:
                 continue
 
+            item_value_raw = _safe_parse_price(item.get('value'))
+            item['value_raw'] = item_value_raw
+            item['value_normalized'] = None
+
+            if item_value_raw is not None:
+                if table_name not in value_samples_by_table:
+                    value_samples_by_table[table_name] = []
+                value_samples_by_table[table_name].append(item_value_raw)
+
             all_results.append(item)
 
             # Track price range for currently matched results.
@@ -565,13 +587,33 @@ def search():
             except:
                 pass
 
-            # Track value range for memory analysis controls.
-            try:
-                value = float(str(item.get('value', 0)).replace('$', '').replace(',', ''))
-                value_range['min'] = min(value_range['min'], value)
-                value_range['max'] = max(value_range['max'], value)
-            except:
-                pass
+    # Compute percentile per category and map percentile (0-100) to value score (0-5).
+    sorted_value_samples_by_table = {
+        table_name: sorted(values)
+        for table_name, values in value_samples_by_table.items()
+        if values
+    }
+
+    for item in all_results:
+        table_name = item.get('table_name')
+        table_values = sorted_value_samples_by_table.get(table_name)
+        item_percentile = _percentile_rank(table_values, item.get('value_raw'))
+        if item_percentile is None:
+            continue
+
+        normalized_value = (item_percentile / 100.0) * 5.0
+        if normalized_value is None:
+            continue
+
+        item['value_percentile'] = round(item_percentile, 3)
+        normalized_value = round(normalized_value, 3)
+        item['value_normalized'] = normalized_value
+        value_range['min'] = min(value_range['min'], normalized_value)
+        value_range['max'] = max(value_range['max'], normalized_value)
+
+    if value_range['min'] != float('inf'):
+        value_range['min'] = 0.0
+        value_range['max'] = 5.0
 
     # Apply numeric range filters after collecting latest rows per item
     if min_price is not None or max_price is not None or min_value is not None or max_value is not None:
@@ -583,7 +625,7 @@ def search():
                 item_price = None
 
             try:
-                item_value = float(str(item.get('value', 0)).replace('$', '').replace(',', '') or 0)
+                item_value = item.get('value_normalized')
             except:
                 item_value = None
 
@@ -649,9 +691,9 @@ def search():
     elif sort_by == 'price_high':
         all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0), reverse=True)
     elif sort_by == 'value_best':
-        all_results.sort(key=lambda x: float(x.get('value', 0) or 0), reverse=True)
+        all_results.sort(key=lambda x: float(x.get('value_normalized') or 0), reverse=True)
     elif sort_by == 'value_worst':
-        all_results.sort(key=lambda x: float(x.get('value', 0) or 0))
+        all_results.sort(key=lambda x: float(x.get('value_normalized') or 0))
 
     total_results = len(all_results)
     total_pages = max(1, (total_results + per_page - 1) // per_page)
@@ -696,6 +738,8 @@ def search():
         price_range['min'] = 0
     if value_range['min'] == float('inf'):
         value_range['min'] = 0
+
+    show_value_analysis = bool(selected_category and sorted_value_samples_by_table.get(selected_category))
     
     return render_template('products.html', 
                            results=paginated_results,
@@ -706,7 +750,7 @@ def search():
                            all_active_filters=active_filter_values,
                            sort_by=sort_by,
                            selected_category=selected_category,
-                           show_memory_analysis=selected_category in ANALYSIS_VALUE_CATEGORIES,
+                           show_memory_analysis=show_value_analysis,
                            pagination_query_string=pagination_query_string,
                            page=page,
                            total_pages=total_pages,

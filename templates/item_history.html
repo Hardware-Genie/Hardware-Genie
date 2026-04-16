@@ -4,8 +4,7 @@
 
 <div class="main-content" style="margin: 20px;">
     <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
-    <h1>Price History: {{ name }}</h1>
-    <h1>{{ specs.name }}</h1>
+    <h2>Price History: {{ name }}</h2>
     <div class="specs-banner">
         {% for key, value in specs.items() %}
             {% if key != 'name' %}

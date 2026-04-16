@@ -136,21 +136,41 @@
 
             {% if total_pages > 1 %}
                 <div class="pager">
+                    <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page=1">First Page</a>
                     {% if page > 1 %}
-                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Prev Page</a>
                     {% endif %}
 
                     {% for p in range(start_page, end_page + 1) %}
                         {% if p == page %}
-                            <span class="current-page">{{ p }}</span>
+                            <form class="page-jump-form" action="{{ url_for('products') }}" method="GET">
+                                {% for key, values in request.args.lists() %}
+                                    {% if key != 'page' %}
+                                        {% for value in values %}
+                                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                        {% endfor %}
+                                    {% endif %}
+                                {% endfor %}
+                                <input
+                                    id="pageInputTop"
+                                    class="current-page page-jump-input"
+                                    type="number"
+                                    name="page"
+                                    min="1"
+                                    max="{{ total_pages }}"
+                                    value="{{ page }}"
+                                    aria-label="Current page"
+                                >
+                            </form>
                         {% else %}
                             <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                         {% endif %}
                     {% endfor %}
 
                     {% if page < total_pages %}
-                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next Page</a>
                     {% endif %}
+                    <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ total_pages }}">Last Page</a>
                 </div>
             {% endif %}
 
@@ -180,7 +200,43 @@
                                 </div>
                             </td>
                             {% if show_memory_analysis %}
-                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
+                                <td>
+                                    {% if item.value_normalized is not none %}
+                                        {% set value_score = item.value_normalized|float %}
+                                        {% set full_zaps = value_score|int %}
+                                        {% set fractional_hundred = (((value_score - full_zaps) * 100)|int) %}
+                                        {% set half_zaps = 0 %}
+                                        {% if fractional_hundred >= 75 %}
+                                            {% set full_zaps = full_zaps + 1 %}
+                                        {% elif fractional_hundred >= 26 and fractional_hundred < 76 %}
+                                            {% set half_zaps = 1 %}
+                                        {% endif %}
+                                        {% set full_zaps = [5, [0, full_zaps]|max]|min %}
+                                        {% if full_zaps == 5 %}
+                                            {% set half_zaps = 0 %}
+                                        {% endif %}
+                                        {% set empty_zaps = 5 - full_zaps - half_zaps %}
+                                        <div class="value-rating" aria-label="Value score {{ '{:,.3f}'.format(item.value_normalized|float) }}">
+                                            <div class="value-rating-icons" aria-hidden="true">
+                                                {% for _ in range(full_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_full.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% for _ in range(half_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_half.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% for _ in range(empty_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_empty.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% if value_score > 4.95 %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" alt="" class="value-zap-icon value-zap-icon--extra">
+                                                {% endif %}
+                                            </div>
+                                            <div class="value-rating-number">{{ "{:,.3f}".format(item.value_normalized|float) }}</div>
+                                        </div>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 
                             {% endif %}
                             <td>
@@ -207,21 +263,41 @@
 
                 {% if total_pages > 1 %}
                     <div class="pager">
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page=1">First Page</a>
                         {% if page > 1 %}
-                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Prev Page</a>
                         {% endif %}
 
                         {% for p in range(start_page, end_page + 1) %}
                             {% if p == page %}
-                                <span class="current-page">{{ p }}</span>
+                                <form class="page-jump-form" action="{{ url_for('products') }}" method="GET">
+                                    {% for key, values in request.args.lists() %}
+                                        {% if key != 'page' %}
+                                            {% for value in values %}
+                                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    <input
+                                        id="pageInputBottom"
+                                        class="current-page page-jump-input"
+                                        type="number"
+                                        name="page"
+                                        min="1"
+                                        max="{{ total_pages }}"
+                                        value="{{ page }}"
+                                        aria-label="Current page"
+                                    >
+                                </form>
                             {% else %}
                                 <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                             {% endif %}
                         {% endfor %}
 
                         {% if page < total_pages %}
-                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next Page</a>
                         {% endif %}
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ total_pages }}">Last Page</a>
                     </div>
                 {% endif %}
             {% else %}
