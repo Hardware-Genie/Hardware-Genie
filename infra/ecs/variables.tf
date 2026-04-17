@@ -55,13 +55,13 @@ variable "container_port" {
 variable "desired_count" {
   description = "Initial desired number of ECS tasks."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "min_task_count" {
   description = "Minimum tasks for autoscaling."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "max_task_count" {
@@ -122,4 +122,10 @@ variable "secret_key" {
   description = "Flask secret key injected into container."
   type        = string
   default     = "replace-me-with-a-strong-secret"
+}
+
+variable "seed_sqlite_to_rds" {
+  description = "Whether app tasks should run SQLite-to-RDS seeding at startup."
+  type        = bool
+  default     = false
 }

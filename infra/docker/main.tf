@@ -31,6 +31,21 @@ locals {
   ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com"
   project_root = abspath("${path.module}/../..")
   image_uri    = "${aws_ecr_repository.this.repository_url}:${var.app_name}-latest"
+  src_files    = sort(tolist(fileset(local.project_root, "src/**")))
+  template_files = sort(tolist(fileset(local.project_root, "templates/**")))
+  static_files   = sort(tolist(fileset(local.project_root, "static/**")))
+
+  source_bundle_hash = sha256(join("", concat(
+    [for file in local.src_files : filesha256("${local.project_root}/${file}")],
+    [for file in local.template_files : filesha256("${local.project_root}/${file}")],
+    [for file in local.static_files : filesha256("${local.project_root}/${file}")],
+    [
+      filesha256("${local.project_root}/Dockerfile"),
+      filesha256("${local.project_root}/requirements.txt"),
+      filesha256("${local.project_root}/.dockerignore"),
+      try(filesha256("${local.project_root}/instance/parts.db"), "missing-parts-db")
+    ]
+  )))
 }
 
 resource "aws_ecr_repository" "this" {
@@ -65,10 +80,9 @@ resource "aws_ecr_lifecycle_policy" "this" {
 
 resource "null_resource" "build_and_push_image" {
   triggers = {
-    dockerfile_hash   = filesha256("${local.project_root}/Dockerfile")
-    requirements_hash = filesha256("${local.project_root}/requirements.txt")
-    app_name          = var.app_name
-    repository_url    = aws_ecr_repository.this.repository_url
+    source_bundle_hash = local.source_bundle_hash
+    app_name           = var.app_name
+    repository_url     = aws_ecr_repository.this.repository_url
   }
 
   provisioner "local-exec" {
@@ -100,4 +114,11 @@ resource "null_resource" "build_and_push_image" {
   }
 
   depends_on = [aws_ecr_repository.this, aws_ecr_lifecycle_policy.this]
+}
+
+data "aws_ecr_image" "latest" {
+  repository_name = aws_ecr_repository.this.name
+  image_tag       = "${var.app_name}-latest"
+
+  depends_on = [null_resource.build_and_push_image]
 }

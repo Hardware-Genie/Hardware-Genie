@@ -195,6 +195,14 @@ resource "aws_ecs_task_definition" "app" {
           value = local.database_url
         },
         {
+          name  = "SEED_SQLITE_TO_RDS",
+          value = var.seed_sqlite_to_rds ? "true" : "false"
+        },
+        {
+          name  = "SQLITE_SEED_PATH",
+          value = "/app/instance/parts.db"
+        },
+        {
           name  = "SECRET_KEY",
           value = var.secret_key
         }
@@ -217,6 +225,9 @@ resource "aws_ecs_service" "app" {
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+  health_check_grace_period_seconds  = 900
 
   network_configuration {
     subnets          = local.private_subnet_ids
@@ -229,9 +240,6 @@ resource "aws_ecs_service" "app" {
     container_name   = var.app_name
     container_port   = var.container_port
   }
-
-  deployment_minimum_healthy_percent = 50
-  deployment_maximum_percent         = 200
 
   depends_on = [aws_lb_listener.http]
 }

@@ -172,6 +172,10 @@ def _safe_parse_price(value):
         return None
 
 
+def _table_exists(table_name):
+    return inspect(db.engine).has_table(table_name)
+
+
 def _percentile_rank(sorted_values, value):
     if value is None or not sorted_values:
         return None
@@ -186,6 +190,9 @@ def _percentile_rank(sorted_values, value):
 
 
 def _build_category_items(table_name):
+    if not _table_exists(table_name):
+        return []
+
     inst = inspect(db.engine)
     columns = [c['name'] for c in inst.get_columns(table_name)]
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
@@ -234,6 +241,15 @@ def _get_build_catalog():
 
 
 def _build_trend_series(table_name):
+    if not _table_exists(table_name):
+        return {
+            'labels': [],
+            'prices': [],
+            'min_prices': [],
+            'max_prices': [],
+            'sample_counts': [],
+        }
+
     sql = text(f"""
     SELECT snapshot_date,
            AVG(CAST(REPLACE(REPLACE(CAST(price AS TEXT), '$', ''), ',', '') AS REAL)) AS avg_price,
@@ -499,6 +515,9 @@ def search():
     filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count']
 
     for table_name in tables_to_search:
+        if not _table_exists(table_name):
+            continue
+
         inst = inspect(db.engine)
         columns = [c['name'] for c in inst.get_columns(table_name)]
         

@@ -20,6 +20,8 @@ infra/**/terraform.tfstate.*
 # Local app/runtime artifacts
 instance/
 *.db
+!instance/
+!instance/parts.db
 
 # Data and analysis folders not required in runtime image
 part_memory_analysis/
