@@ -3,6 +3,7 @@ import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_login import current_user
 from sqlalchemy import create_engine, inspect, text
 import os
 import pandas as pd
@@ -171,6 +172,7 @@ def _seed_postgres_from_sqlite_if_needed(db_uri):
 app = Flask('Hardware Genie')
 app.secret_key = os.getenv('SECRET_KEY', 'you will never know')
 app.logger.setLevel(logging.INFO)
+app.config['PASSWORD_RESET_DEBUG_FLOW'] = os.getenv('PASSWORD_RESET_DEBUG_FLOW', 'true').lower() in ('1', 'true', 'yes', 'on')
 
 app.jinja_env.add_extension('jinja2.ext.loopcontrols')
 
@@ -188,6 +190,13 @@ with app.app_context():
 # login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+
+@app.context_processor
+def inject_admin_flags():
+    return {
+        'is_admin_user': bool(getattr(current_user, 'is_authenticated', False) and getattr(current_user, 'is_admin', False)),
+    }
 
 from app.models import User
 

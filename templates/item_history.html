@@ -4,7 +4,7 @@
 
 <div class="main-content" style="margin: 20px;">
     <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
-    <h2>Price History: {{ name }}</h2>
+    <h2>Price History: {{ name }}{% if latest_price is not none %} - ${{ '%.2f'|format(latest_price) }}{% endif %}</h2>
     <div class="specs-banner">
         {% for key, value in specs.items() %}
             {% if key != 'name' %}
@@ -34,7 +34,7 @@
             {% endfor %}
         </tbody>
     </table>
-
+    {% include 'descriptions/' + category + '_description.html' ignore missing %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -61,7 +61,7 @@
                     responsive: true,
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            beginAtZero: true,
                             title: { display: true, text: 'Price' }
                         },
                         x: {

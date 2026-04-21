@@ -16,16 +16,37 @@
             <details class="nav_dropdown">
                 <summary class="header_tab header_tab--dropdown">Products</summary>
                 <div class="nav_dropdown_menu" aria-label="Product categories">
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
-                    <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/cpu.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">CPU</span>
+                    </a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/storage.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">Hard Drive</span>
+                    </a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/Ram_Icon.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">Memory</span>
+                    </a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/motherboard.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">Motherboard</span>
+                    </a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/powersupply.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">Power Supply</span>
+                    </a>
+                    <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">
+                        <img class="nav_dropdown_icon" src="{{ url_for('static', filename='images/GPU.png') }}" alt="" aria-hidden="true">
+                        <span class="nav_dropdown_label">Video Card</span>
+                    </a>
                 </div>
             </details>
             <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
             <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
+            {% if is_admin_user %}
+                <a class="header_tab" href="{{ url_for('scrapers') }}">Scrapers</a>
+            {% endif %}
         </div>
     </div>
 </nav>

@@ -22,15 +22,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let lastScrollY = window.scrollY;
     let ticking = false;
+    const hideThreshold = 12;
 
     const handleScroll = () => {
         const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
 
-        if (currentScrollY <= 10) {
+        if (currentScrollY <= hideThreshold) {
             nav.classList.remove('nav--hidden');
-        } else if (currentScrollY > lastScrollY) {
+        } else if (scrollDelta > 0) {
             nav.classList.add('nav--hidden');
-        } else if (currentScrollY < lastScrollY) {
+        } else if (scrollDelta < 0) {
             nav.classList.remove('nav--hidden');
         }
 

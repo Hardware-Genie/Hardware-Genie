@@ -9,6 +9,7 @@
         <div class="build-page__actions">
             <button type="button" class="build-action-btn" id="saveBuildButton">Save Build</button>
             <button type="button" class="build-action-btn build-action-btn--secondary" id="loadBuildButton">Load Build</button>
+            <button type="button" class="build-action-btn build-action-btn--danger" id="clearBuildButton">Clear Build</button>
         </div>
     </div>
 
@@ -74,6 +75,7 @@ const savedPartsCount = document.getElementById('savedPartsCount');
 const categoryCards = document.querySelectorAll('.build-category-card');
 const saveBuildButton = document.getElementById('saveBuildButton');
 const loadBuildButton = document.getElementById('loadBuildButton');
+const clearBuildButton = document.getElementById('clearBuildButton');
 const buildLibraryDialog = document.getElementById('buildLibraryDialog');
 const buildLibraryMessage = document.getElementById('buildLibraryMessage');
 const savedBuildSelect = document.getElementById('savedBuildSelect');
@@ -270,6 +272,11 @@ function normalizePartsByCategory(parts) {
 function persistNormalizedParts(categoryMap) {
     const normalizedArray = Object.values(categoryMap);
     setSavedParts(normalizedArray);
+}
+
+function clearCurrentBuild() {
+    setSavedParts([]);
+    renderSavedList();
 }
 
 function getCurrentBuildPayload() {
@@ -539,6 +546,10 @@ if (loadBuildButton) {
             buildLibraryMessage.textContent = 'Unable to load saved builds.';
         });
     });
+}
+
+if (clearBuildButton) {
+    clearBuildButton.addEventListener('click', clearCurrentBuild);
 }
 
 if (loadSelectedBuildButton) {

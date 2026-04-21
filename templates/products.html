@@ -178,12 +178,60 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Item Name</th>
+                            <th>
+                                <div class="value-header">
+                                    <span>Item</span>
+                                    <button
+                                        type="button"
+                                        class="value-help-btn"
+                                        aria-label="What does Item Name mean?"
+                                        data-tooltip="Shows the product name and the category-specific spec summary beneath it."
+                                    >
+                                        ?
+                                    </button>
+                                </div>
+                            </th>
                             {% if show_memory_analysis %}
-                                <th>Value</th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Value</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn"
+                                            aria-label="What does value mean?"
+                                            data-tooltip="Value is a normalized score based on price and performance. Higher numbers mean better value."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
                             {% endif %}
-                            <th>Latest Price</th>
-                            <th>Add to Build</th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Latest Price</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn"
+                                            aria-label="What does Latest Price mean?"
+                                            data-tooltip="Shows the most recent snapshot price from the price history for this product."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Add to Build</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn value-help-btn--align-right"
+                                            aria-label="What does Add to Build mean?"
+                                            data-tooltip="Adds the item to a savable build list so users can total up parts and manage a complete build."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -217,7 +265,7 @@
                                         {% endif %}
                                         {% set empty_zaps = 5 - full_zaps - half_zaps %}
                                         <div class="value-rating" aria-label="Value score {{ '{:,.3f}'.format(item.value_normalized|float) }}">
-                                            <div class="value-rating-icons" aria-hidden="true">
+                                            <div class="value-rating-icons" title="Representational Value Icons" aria-hidden="true">
                                                 {% for _ in range(full_zaps) %}
                                                     <img src="{{ url_for('static', filename='images/value_zap_full.png') }}" alt="" class="value-zap-icon">
                                                 {% endfor %}
@@ -228,10 +276,12 @@
                                                     <img src="{{ url_for('static', filename='images/value_zap_empty.png') }}" alt="" class="value-zap-icon">
                                                 {% endfor %}
                                                 {% if value_score > 4.95 %}
-                                                    <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" alt="" class="value-zap-icon value-zap-icon--extra">
+                                                    <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" title="Excellent Value Mark" alt="Extra Value" class="value-zap-icon value-zap-icon--extra">
                                                 {% endif %}
                                             </div>
-                                            <div class="value-rating-number">{{ "{:,.3f}".format(item.value_normalized|float) }}</div>
+                                                    <div class="value-rating-number-row">
+                                                        <div class="value-rating-number" title="Value is a normalized score based on price and performance">{{ "{:,.3f}".format(item.value_normalized|float) }}</div>
+                                                    </div>
                                         </div>
                                     {% else %}
                                         N/A
@@ -241,7 +291,7 @@
                             {% endif %}
                             <td>
                                 <div>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</div>
-                                <div class="price-snapshot-count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
+                                <div class="price-snapshot-count" title="Price Snapshot Count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
                             </td>
                             <td>
                                 <button

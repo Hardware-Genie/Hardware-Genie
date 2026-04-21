@@ -29,6 +29,10 @@
                 </ul>
             {% endif %}
 
+            <p class="auth-switch">
+                <a href="{{ url_for('password_reset_preview') if password_reset_debug_flow else url_for('reset_password') }}">Forgot password?</a>
+            </p>
+
             <div class="auth-actions">
                 <button class="back-button js-auth-back" type="button">Back</button>
                 <button class="auth-submit" type="submit">Login</button>

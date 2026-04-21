@@ -63,6 +63,7 @@
                             </div>
                             <div class="profile-build-actions">
                                 <a class="apply-filters-btn build-slot-action" href="{{ url_for('build_page', build_id=build.id) }}">Open Build</a>
+                                <button type="button" class="build-action-btn build-action-btn--secondary profile-rename-build" data-build-id="{{ build.id }}">Rename</button>
                                 <button type="button" class="build-remove-btn profile-delete-build" data-build-id="{{ build.id }}">Delete</button>
                             </div>
                         </div>
@@ -75,11 +76,126 @@
     </div>
 </section>
 
+<dialog class="build-library-dialog" id="renameBuildDialog">
+    <form method="dialog" class="build-library-dialog__panel">
+        <h3>Rename Build</h3>
+        <p class="build-library-dialog__message" id="renameBuildMessage">Enter a new name for this build.</p>
+        <label class="build-library-dialog__label" for="renameBuildInput">Build name</label>
+        <input id="renameBuildInput" class="build-library-dialog__select" type="text" maxlength="120" placeholder="My Updated Build">
+        <div class="build-library-dialog__actions">
+            <button type="button" class="build-action-btn" id="confirmRenameBuildButton">Save</button>
+            <button type="button" class="build-action-btn build-action-btn--secondary" id="cancelRenameBuildButton">Cancel</button>
+        </div>
+    </form>
+</dialog>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const buildList = document.getElementById('profileBuildList');
     const emptyMessage = document.getElementById('emptyBuildMessage');
     const deleteButtons = document.querySelectorAll('.profile-delete-build');
+    const renameButtons = document.querySelectorAll('.profile-rename-build');
+    const renameBuildDialog = document.getElementById('renameBuildDialog');
+    const renameBuildInput = document.getElementById('renameBuildInput');
+    const renameBuildMessage = document.getElementById('renameBuildMessage');
+    const confirmRenameBuildButton = document.getElementById('confirmRenameBuildButton');
+    const cancelRenameBuildButton = document.getElementById('cancelRenameBuildButton');
+
+    let activeRenameBuildId = null;
+    let activeRenameNameEl = null;
+
+    function resetRenameDialog(message) {
+        if (renameBuildMessage) {
+            renameBuildMessage.textContent = message || 'Enter a new name for this build.';
+        }
+    }
+
+    async function submitRename() {
+        if (!activeRenameBuildId || !renameBuildInput) {
+            return;
+        }
+
+        const trimmedName = (renameBuildInput.value || '').trim();
+        if (!trimmedName) {
+            resetRenameDialog('Build name cannot be empty.');
+            renameBuildInput.focus();
+            return;
+        }
+
+        confirmRenameBuildButton.disabled = true;
+        const response = await fetch(`{{ url_for('saved_builds_api') }}/${activeRenameBuildId}`, {
+            method: 'PUT',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ build_name: trimmedName }),
+        });
+        confirmRenameBuildButton.disabled = false;
+
+        if (!response.ok) {
+            resetRenameDialog('Unable to rename build. Please try again.');
+            return;
+        }
+
+        const payload = await response.json();
+        if (activeRenameNameEl && payload.build_name) {
+            activeRenameNameEl.textContent = payload.build_name;
+        }
+
+        if (renameBuildDialog) {
+            renameBuildDialog.close();
+        }
+    }
+
+    if (confirmRenameBuildButton) {
+        confirmRenameBuildButton.addEventListener('click', () => {
+            submitRename();
+        });
+    }
+
+    if (cancelRenameBuildButton && renameBuildDialog) {
+        cancelRenameBuildButton.addEventListener('click', () => {
+            renameBuildDialog.close();
+        });
+    }
+
+    if (renameBuildInput) {
+        renameBuildInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                submitRename();
+            }
+        });
+    }
+
+    renameButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const buildId = button.dataset.buildId;
+            if (!buildId) {
+                return;
+            }
+
+            const row = button.closest('.profile-build-item');
+            const nameEl = row ? row.querySelector('.profile-build-name') : null;
+            const currentName = nameEl ? (nameEl.textContent || '').trim() : '';
+            activeRenameBuildId = buildId;
+            activeRenameNameEl = nameEl;
+
+            if (renameBuildInput) {
+                renameBuildInput.value = currentName;
+            }
+            resetRenameDialog();
+
+            if (renameBuildDialog) {
+                renameBuildDialog.showModal();
+                if (renameBuildInput) {
+                    renameBuildInput.focus();
+                    renameBuildInput.select();
+                }
+            }
+        });
+    });
 
     deleteButtons.forEach((button) => {
         button.addEventListener('click', async () => {

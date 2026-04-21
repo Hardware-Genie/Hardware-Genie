@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block main %}
+{% include "partials/header.html" %}
+<section class="scraper-page">
+    <div class="scraper-card">
+        <a class="back-button" href="{{ url_for('scrapers') }}">← Back to Scrapers</a>
+        <h1 class="scraper-title">Part Scraper</h1>
+        <p class="scraper-subtitle">Run the product scraper for a specific hardware item URL.</p>
+
+        <form class="auth-form scraper-form" action="" method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <label class="auth-label" for="name">{{ form.name.label.text }}</label>
+            {{ form.name(class_='auth-input', id='name', size=50, placeholder='Example: RTX 4070 SUPER') }}
+
+            <label class="auth-label" for="url">{{ form.url.label.text }}</label>
+            {{ form.url(class_='auth-input', id='url', size=50, placeholder='https://www.newegg.com/...') }}
+
+            {{ form.submit(class_='auth-submit') }}
+        </form>
+    </div>
+</section>
+{% endblock %}

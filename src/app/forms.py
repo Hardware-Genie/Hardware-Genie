@@ -8,6 +8,19 @@ class WebsiteToScrape(FlaskForm):
     url = StringField('URL', validators=[DataRequired()])
     submit = SubmitField('Submit')
 
+
+class PartScraperForm(FlaskForm):
+    name = StringField('Product Name', validators=[DataRequired()])
+    url = StringField('Product URL', validators=[DataRequired()])
+    submit = SubmitField('Run Part Scraper')
+
+
+class ArticleScraperForm(FlaskForm):
+    source = StringField('Source (optional)', validators=[Optional()])
+    keywords = StringField('Keywords CSV (optional)', validators=[Optional()])
+    max_articles = IntegerField('Max Articles (optional)', validators=[Optional()])
+    submit = SubmitField('Run Article Scraper')
+
 class SignupForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -19,6 +32,13 @@ class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Log In')
+
+
+class ResetPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=8, max=128)])
+    confirm_new_password = PasswordField('Confirm New Password', validators=[DataRequired(), EqualTo('new_password', message='Passwords must match.')])
+    submit = SubmitField('Reset Password')
 
 
 class ProfileForm(FlaskForm):

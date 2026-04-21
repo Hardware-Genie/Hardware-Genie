@@ -2,6 +2,31 @@
 
 Use this checklist when you want a repeatable teardown and rebuild of the full stack.
 
+## Fast Path (Scripts)
+
+Use these scripts for one-command runs:
+
+Destroy everything:
+
+```powershell
+Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
+.\scripts\terraform-destroy.ps1 -DbPassword "greatpassword"
+```
+
+Build everything:
+
+```powershell
+Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
+.\scripts\terraform-build.ps1 -DbPassword "greatpassword"
+```
+
+Build + run one-time seed:
+
+```powershell
+Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
+.\scripts\terraform-build.ps1 -DbPassword "greatpassword" -SeedAfterBuild
+```
+
 ## Prerequisites
 
 - AWS CLI authenticated for the correct account/region.
