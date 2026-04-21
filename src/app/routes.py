@@ -1,5 +1,6 @@
 
 from logging import exception
+from bisect import bisect_right
 
 from flask import Flask, render_template, jsonify, redirect, url_for, request
 from sqlalchemy import inspect, text
@@ -11,7 +12,7 @@ import json
 import re
 from urllib.parse import urlencode
 
-from app.forms import LoginForm, SignupForm, WebsiteToScrape
+from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm
 from app.models import User, SavedBuild
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
@@ -145,8 +146,6 @@ FILTER_LABEL_OVERRIDES = {
     'form_factor': 'Form Factor',
 }
 
-ANALYSIS_VALUE_CATEGORIES = {'memory', 'power_supply'}
-
 BUILD_TABLE_LABELS = {
     'cpu': 'CPU',
     'memory': 'Memory',
@@ -166,6 +165,13 @@ TREND_CATEGORY_LABELS = {
 }
 
 
+def _is_admin_user():
+    if not getattr(current_user, 'is_authenticated', False):
+        return False
+
+    return bool(getattr(current_user, 'is_admin', False))
+
+
 def _safe_parse_price(value):
     try:
         return float(str(value).replace('$', '').replace(',', '').strip())
@@ -173,7 +179,27 @@ def _safe_parse_price(value):
         return None
 
 
+def _table_exists(table_name):
+    return inspect(db.engine).has_table(table_name)
+
+
+def _percentile_rank(sorted_values, value):
+    if value is None or not sorted_values:
+        return None
+
+    total_values = len(sorted_values)
+    if total_values == 1:
+        return 100.0
+
+    rank_index = bisect_right(sorted_values, value) - 1
+    rank_index = max(0, min(rank_index, total_values - 1))
+    return (rank_index / (total_values - 1)) * 100.0
+
+
 def _build_category_items(table_name):
+    if not _table_exists(table_name):
+        return []
+
     inst = inspect(db.engine)
     columns = [c['name'] for c in inst.get_columns(table_name)]
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
@@ -222,6 +248,15 @@ def _get_build_catalog():
 
 
 def _build_trend_series(table_name):
+    if not _table_exists(table_name):
+        return {
+            'labels': [],
+            'prices': [],
+            'min_prices': [],
+            'max_prices': [],
+            'sample_counts': [],
+        }
+
     sql = text(f"""
     SELECT snapshot_date,
            AVG(CAST(REPLACE(REPLACE(CAST(price AS TEXT), '$', ''), ',', '') AS REAL)) AS avg_price,
@@ -312,9 +347,15 @@ def index():
 def signup():
     form = SignupForm()
     if form.validate_on_submit():
-        if form.password.data == form.confirm_password.data:
-            hashed = bcrypt.hashpw((form.password.data).encode('utf-8'), bcrypt.gensalt())
-            newUser = User(email=form.email.data,username=form.username.data, password_hash=hashed)
+        email = (form.email.data or '').strip().lower()
+        password = form.password.data or ''
+        if len(password) < 8 or len(password) > 128:
+            form.password.errors.append('Password must be between 8 and 128 characters.')
+            return render_template('signup.html', form=form, same_email=0, miss_match=0, form_errors=form.errors)
+
+        if password == form.confirm_password.data:
+            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            newUser = User(email=email,username=form.username.data, password_hash=hashed)
             db.session.add(newUser)
             # don't commit if there is another user with the same id, or any other error that occurs with the commit
             try:
@@ -332,12 +373,18 @@ def signup():
 def login():
     form = LoginForm()
     if form.validate_on_submit():
+        email = (form.email.data or '').strip().lower()
         #Try to find user
         try:
-            user = db.session.execute(db.select(User).filter(User.email==form.email.data)).scalar_one_or_none()
+            user = db.session.execute(db.select(User).filter(User.email==email)).scalar_one_or_none()
         except:
             # if the id doesnt exist give user message
-            return render_template('login.html', wrong_email=1, form=form)
+            return render_template(
+                'login.html',
+                wrong_email=1,
+                form=form,
+                password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
+            )
         #    
         #Authenticate user
         try:
@@ -348,13 +395,73 @@ def login():
             else:
                 # if the password is wrong take to other page to say wrong password
                 print("Wrong password")
-                return render_template('login.html', wrong_pass=1, form=form)
+                return render_template(
+                    'login.html',
+                    wrong_pass=1,
+                    form=form,
+                    password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
+                )
         except Exception as e:
             print(f"Error during login: {e}")
-            return render_template('login.html', wrong_email=1, form=form)
+            return render_template(
+                'login.html',
+                wrong_email=1,
+                form=form,
+                password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
+            )
         print("Error during login")
     print(form.errors)
-    return render_template('login.html', form=form, wrong_email=0, wrong_pass=0, form_errors=form.errors)
+    return render_template(
+        'login.html',
+        form=form,
+        wrong_email=0,
+        wrong_pass=0,
+        form_errors=form.errors,
+        password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
+    )
+
+
+@app.route('/password-reset-preview')
+def password_reset_preview():
+    if not app.config.get('PASSWORD_RESET_DEBUG_FLOW', False):
+        return redirect(url_for('reset_password'))
+
+    return render_template(
+        'password_reset_preview.html',
+        redirect_url=url_for('reset_password'),
+        preview_image=url_for('static', filename='images/angai313-spongebob-sad.gif'),
+    )
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    form = ResetPasswordForm()
+    password_reset = False
+
+    if form.validate_on_submit():
+        email = (form.email.data or '').strip().lower()
+        new_password = form.new_password.data or ''
+
+        user = db.session.execute(db.select(User).filter(User.email == email)).scalar_one_or_none()
+        if user is None:
+            form.email.errors.append('Email not found. Please try again.')
+        elif new_password != (form.confirm_new_password.data or ''):
+            form.confirm_new_password.errors.append('Passwords must match.')
+        else:
+            user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            db.session.commit()
+            password_reset = True
+            form.email.data = ''
+            form.new_password.data = ''
+            form.confirm_new_password.data = ''
+
+    return render_template(
+        'reset_password.html',
+        form=form,
+        password_reset=password_reset,
+        form_errors=form.errors,
+        password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
+    )
 
 
 @app.route('/logout')
@@ -363,36 +470,154 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
-@app.route('/scraper', methods=['GET', 'POST'])
-def scraper():
-    form = WebsiteToScrape()
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ProfileForm()
+    profile_updated = request.args.get('updated', '0') == '1'
+    duplicate_username = False
+    duplicate_email = False
+
     if form.validate_on_submit():
-        # Process the form data
+        username = (form.username.data or '').strip()
+        email = (form.email.data or '').strip().lower()
+
+        if not username:
+            form.username.errors.append('Username is required.')
+        if not email:
+            form.email.errors.append('Email is required.')
+
+        if username and username != current_user.username:
+            existing_username = db.session.execute(
+                db.select(User).filter(User.username == username, User.id != current_user.id)
+            ).scalar_one_or_none()
+            duplicate_username = existing_username is not None
+
+        if email and email != current_user.email:
+            existing_email = db.session.execute(
+                db.select(User).filter(User.email == email, User.id != current_user.id)
+            ).scalar_one_or_none()
+            duplicate_email = existing_email is not None
+
+        if duplicate_username:
+            form.username.errors.append('Username already exists. Please choose another one.')
+        if duplicate_email:
+            form.email.errors.append('Email already exists. Please choose another one.')
+
+        if not form.errors:
+            current_user.username = username
+            current_user.email = email
+
+            new_password = form.new_password.data or ''
+            if new_password.strip():
+                current_user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+
+            db.session.commit()
+            return redirect(url_for('profile', updated=1))
+
+    elif request.method == 'GET':
+        form.username.data = current_user.username
+        form.email.data = current_user.email
+
+    saved_builds = (
+        SavedBuild.query
+        .filter_by(user_id=current_user.id)
+        .order_by(SavedBuild.updated_at.desc(), SavedBuild.id.desc())
+        .all()
+    )
+
+    return render_template(
+        'profile.html',
+        form=form,
+        profile_updated=profile_updated,
+        duplicate_username=duplicate_username,
+        duplicate_email=duplicate_email,
+        saved_builds=saved_builds,
+    )
+
+@app.route('/scraper')
+@login_required
+def scraper_redirect():
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    return redirect(url_for('scrapers'))
+
+
+@app.route('/scrapers')
+@login_required
+def scrapers():
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    return render_template('scrapers.html')
+
+
+@app.route('/scrapers/parts', methods=['GET', 'POST'])
+@login_required
+def scraper_parts():
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    form = PartScraperForm()
+    if form.validate_on_submit():
         name = form.name.data
         url = form.url.data
-
-        # enqueue a Celery job rather than running inline
-        
         task = tasks.crawl_spider.delay(name, url)
-        # the request returns immediately; the worker will pick up the crawl
+        return redirect(url_for('scraper_status', task_id=task.id, scraper='parts'))
+    return render_template('scraper_parts.html', form=form)
 
-        print(f"Name: {name}, URL: {url}")
-        return redirect(url_for('scraper_status', task_id=task.id))
-    return render_template('scraper.html', form=form)
+
+@app.route('/scrapers/articles', methods=['GET', 'POST'])
+@login_required
+def scraper_articles():
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    form = ArticleScraperForm()
+    if form.validate_on_submit():
+        source = (form.source.data or '').strip() or None
+        keywords = (form.keywords.data or '').strip() or None
+        max_articles = form.max_articles.data
+        task = tasks.crawl_tech_news.delay(source=source, keywords=keywords, max_articles=max_articles)
+        return redirect(url_for('scraper_status', task_id=task.id, scraper='articles'))
+    return render_template('scraper_articles.html', form=form)
 
 @app.route('/scraper/status/<task_id>')
+@login_required
 def scraper_status(task_id):
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
     from celery.result import AsyncResult
     from app.tasks import celery
     result = AsyncResult(task_id, app=celery)
-    return render_template('scraper_status.html', task_id=task_id, state=result.state, result=result.result, info=result.info)
+    scraper_type = request.args.get('scraper', 'parts')
+    if scraper_type == 'articles':
+        back_url = url_for('scraper_articles')
+        back_label = 'Back to Article Scraper'
+    else:
+        back_url = url_for('scraper_parts')
+        back_label = 'Back to Part Scraper'
+
+    return render_template(
+        'scraper_status.html',
+        task_id=task_id,
+        state=result.state,
+        result=result.result,
+        info=result.info,
+        back_url=back_url,
+        back_label=back_label,
+    )
 
 
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
     page = request.args.get('page', 1, type=int)
-    sort_by = request.args.get('sort', 'alphabetical_asc')
+    requested_sort = request.args.get('sort')
+    sort_by = requested_sort if requested_sort else None
     from_build = request.args.get('from_build', '0') == '1'
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
@@ -414,12 +639,16 @@ def search():
     filter_options = {}
     price_range = {'min': float('inf'), 'max': 0}
     value_range = {'min': float('inf'), 'max': 0}
+    value_samples_by_table = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
     filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count']
 
     for table_name in tables_to_search:
+        if not _table_exists(table_name):
+            continue
+
         inst = inspect(db.engine)
         columns = [c['name'] for c in inst.get_columns(table_name)]
         
@@ -474,6 +703,16 @@ def search():
                         filter_options[key] = set()
                     filter_options[key].add(normalized_val)
 
+            # Build a stable per-category value baseline from all latest rows,
+            # independent of active filters.
+            item_value_raw = _safe_parse_price(item.get('value'))
+            item['value_raw'] = item_value_raw
+            item['value_normalized'] = None
+            if item_value_raw is not None:
+                if table_name not in value_samples_by_table:
+                    value_samples_by_table[table_name] = []
+                value_samples_by_table[table_name].append(item_value_raw)
+
             # Apply selected checkbox filters after building options to avoid shrinking menus.
             item_matches_active_filters = True
             for key, val_list in active_filter_values.items():
@@ -499,13 +738,37 @@ def search():
             except:
                 pass
 
-            # Track value range for memory analysis controls.
-            try:
-                value = float(str(item.get('value', 0)).replace('$', '').replace(',', ''))
-                value_range['min'] = min(value_range['min'], value)
-                value_range['max'] = max(value_range['max'], value)
-            except:
-                pass
+    # Compute percentile per category and map percentile (0-100) to value score (0-5).
+    sorted_value_samples_by_table = {
+        table_name: sorted(values)
+        for table_name, values in value_samples_by_table.items()
+        if values
+    }
+
+    has_value_for_selected_category = bool(selected_category and sorted_value_samples_by_table.get(selected_category))
+    if not sort_by:
+        sort_by = 'value_best' if has_value_for_selected_category else 'alphabetical_asc'
+
+    for item in all_results:
+        table_name = item.get('table_name')
+        table_values = sorted_value_samples_by_table.get(table_name)
+        item_percentile = _percentile_rank(table_values, item.get('value_raw'))
+        if item_percentile is None:
+            continue
+
+        normalized_value = (item_percentile / 100.0) * 5.0
+        if normalized_value is None:
+            continue
+
+        item['value_percentile'] = round(item_percentile, 3)
+        normalized_value = round(normalized_value, 3)
+        item['value_normalized'] = normalized_value
+        value_range['min'] = min(value_range['min'], normalized_value)
+        value_range['max'] = max(value_range['max'], normalized_value)
+
+    if value_range['min'] != float('inf'):
+        value_range['min'] = 0.0
+        value_range['max'] = 5.0
 
     # Apply numeric range filters after collecting latest rows per item
     if min_price is not None or max_price is not None or min_value is not None or max_value is not None:
@@ -517,7 +780,7 @@ def search():
                 item_price = None
 
             try:
-                item_value = float(str(item.get('value', 0)).replace('$', '').replace(',', '') or 0)
+                item_value = item.get('value_normalized')
             except:
                 item_value = None
 
@@ -583,9 +846,9 @@ def search():
     elif sort_by == 'price_high':
         all_results.sort(key=lambda x: float(str(x.get('price', 0)).replace('$', '').replace(',', '') or 0), reverse=True)
     elif sort_by == 'value_best':
-        all_results.sort(key=lambda x: float(x.get('value', 0) or 0), reverse=True)
+        all_results.sort(key=lambda x: float(x.get('value_normalized') or 0), reverse=True)
     elif sort_by == 'value_worst':
-        all_results.sort(key=lambda x: float(x.get('value', 0) or 0))
+        all_results.sort(key=lambda x: float(x.get('value_normalized') or 0))
 
     total_results = len(all_results)
     total_pages = max(1, (total_results + per_page - 1) // per_page)
@@ -630,6 +893,8 @@ def search():
         price_range['min'] = 0
     if value_range['min'] == float('inf'):
         value_range['min'] = 0
+
+    show_value_analysis = has_value_for_selected_category
     
     return render_template('products.html', 
                            results=paginated_results,
@@ -640,7 +905,7 @@ def search():
                            all_active_filters=active_filter_values,
                            sort_by=sort_by,
                            selected_category=selected_category,
-                           show_memory_analysis=selected_category in ANALYSIS_VALUE_CATEGORIES,
+                           show_memory_analysis=show_value_analysis,
                            pagination_query_string=pagination_query_string,
                            page=page,
                            total_pages=total_pages,
@@ -735,10 +1000,32 @@ def saved_builds_api():
     }), 201
 
 
-@app.route('/api/builds/<int:build_id>', methods=['GET'])
+@app.route('/api/builds/<int:build_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def saved_build_detail(build_id):
     saved_build = SavedBuild.query.filter_by(id=build_id, user_id=current_user.id).first_or_404()
+
+    if request.method == 'PUT':
+        payload = request.get_json(silent=True) or {}
+        build_name = str(payload.get('build_name', '')).strip()
+
+        if not build_name:
+            return jsonify({'error': 'Build name is required.'}), 400
+
+        saved_build.build_name = build_name
+        db.session.commit()
+        return jsonify({
+            'id': saved_build.id,
+            'build_name': saved_build.build_name,
+            'build_data': saved_build.build_data or [],
+            'updated_at': saved_build.updated_at.isoformat() if saved_build.updated_at else None,
+        })
+
+    if request.method == 'DELETE':
+        db.session.delete(saved_build)
+        db.session.commit()
+        return jsonify({'status': 'deleted', 'id': build_id})
+
     return jsonify({
         'id': saved_build.id,
         'build_name': saved_build.build_name,
@@ -751,6 +1038,7 @@ def saved_build_detail(build_id):
 @app.route('/history')
 def item_history():
     table_type = request.args.get('table_type')
+    category = (table_type or '').strip().lower().replace('-', '_')
 
     ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt']
     filters = {k: v for k, v in request.args.items() if k not in ignored and v != 'None'}
@@ -790,6 +1078,8 @@ def item_history():
                            history=rows, 
                            specs=filters,
                            name=product_name,
+                           category=category,
+                           latest_price=prices[-1] if prices else None,
                            dates=labels,
                            prices=prices)
 

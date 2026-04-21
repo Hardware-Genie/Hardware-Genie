@@ -1,6 +1,7 @@
 from datetime import datetime
 from app import db
 from flask_login import UserMixin, login_user, logout_user, login_required, current_user, login_manager
+from sqlalchemy.sql import expression
 
 # EXAMPLE MODEL
 # listing parts.
@@ -24,6 +25,7 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String, nullable=False, unique=True)
     email = db.Column(db.String, nullable=False, unique=True)
     password_hash = db.Column(db.String, nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False, server_default=expression.false())
 
     def __str__(self):
         return f'<User(id={self.id}, username={self.username})>'

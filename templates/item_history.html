@@ -1,41 +1,10 @@
 {% extends 'base.html' %}
 {% block main %}
-<nav>
-<div class="header_block">
-    <div class="header_top">
-        <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
-    </div>
-    <div class="header_buttons">
-        {% if current_user.is_authenticated %}
-            <span class="header_button">{{ current_user.username }}</span>
-            <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
-        {% else %}
-            <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
-            <a class="header_button" href="{{ url_for('login') }}">Login</a>
-        {% endif %}
-    </div>
-    <div class="header_tabs" aria-label="Main navigation tabs">
-        <details class="nav_dropdown">
-            <summary class="header_tab header_tab--dropdown">Products</summary>
-            <div class="nav_dropdown_menu" aria-label="Product categories">
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
-                <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
-            </div>
-        </details>
-        <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
-        <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
-    </div>
-</div>
-</nav>
+{% include 'partials/header.html' %}
 
 <div class="main-content" style="margin: 20px;">
     <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
-    <h1>Price History: {{ name }}</h1>
-    <h1>{{ specs.name }}</h1>
+    <h2>Price History: {{ name }}{% if latest_price is not none %} - ${{ '%.2f'|format(latest_price) }}{% endif %}</h2>
     <div class="specs-banner">
         {% for key, value in specs.items() %}
             {% if key != 'name' %}
@@ -65,7 +34,7 @@
             {% endfor %}
         </tbody>
     </table>
-
+    {% include 'descriptions/' + category + '_description.html' ignore missing %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -92,7 +61,7 @@
                     responsive: true,
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            beginAtZero: true,
                             title: { display: true, text: 'Price' }
                         },
                         x: {

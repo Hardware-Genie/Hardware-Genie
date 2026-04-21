@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block main %}
+{% include "partials/header.html" %}
+<div class="main_block">
+    <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
+    <h1>Scrapers</h1>
+    <p>Choose which scraper to run.</p>
+
+    <table class="center" style="max-width: 760px; width: 100%;">
+        <tr>
+            <td>
+                <a class="scraper-tile-link" href="{{ url_for('scraper_parts') }}" aria-label="Open Part Scraper">
+                    <h2 style="font-size: 1.4rem; margin-bottom: 8px;">Part Scraper</h2>
+                    <p>Scrapes a single hardware product from a product URL.</p>
+                    <span class="header_button">Open Part Scraper</span>
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <a class="scraper-tile-link" href="{{ url_for('scraper_articles') }}" aria-label="Open Article Scraper">
+                    <h2 style="font-size: 1.4rem; margin-bottom: 8px;">Article Scraper</h2>
+                    <p>Scrapes hardware news articles, with optional source and keyword filters.</p>
+                    <span class="header_button">Open Article Scraper</span>
+                </a>
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

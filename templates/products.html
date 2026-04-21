@@ -5,37 +5,7 @@
     <title>Products - Hardware Genie</title>
 </head>
 <body>
-    <nav>
-        <div class="header_block">    
-            <div class="header_top">
-                <a class="site-title-link" href="{{ url_for('index') }}" aria-label="Go to index page"><h1>Hardware Genie</h1></a>
-            </div>
-            <div class="header_buttons">
-                {% if current_user.is_authenticated %}
-                    <p>Current User: {{ current_user.username }}</p>
-                    <a class="header_button" href="{{ url_for('logout') }}">Logout</a>
-                {% else %}
-                    <a class="header_button header_button--secondary" href="{{ url_for('signup') }}">Sign Up</a>
-                    <a class="header_button" href="{{ url_for('login') }}">Login</a>
-                {% endif %}
-            </div>
-            <div class="header_tabs" aria-label="Main navigation tabs">
-                <details class="nav_dropdown">
-                    <summary class="header_tab header_tab--dropdown">Products</summary>
-                    <div class="nav_dropdown_menu" aria-label="Product categories">
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='cpu') }}">CPU</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='internal_hard_drive') }}">Hard Drive</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='memory') }}">Memory</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='motherboard') }}">Motherboard</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='power_supply') }}">Power Supply</a>
-                        <a class="nav_dropdown_item" href="{{ url_for('products', category='video_card') }}">Video Card</a>
-                    </div>
-                </details>
-                <a class="header_tab" href="{{ url_for('trends') }}">Trends</a>
-                <a class="header_tab" href="{{ url_for('build_page') }}">Build</a>
-            </div>
-        </div>
-    </nav>
+    {% include 'partials/header.html' %}
 <div class="search-results-container">
     <div class="search-toolbar">
         <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
@@ -166,21 +136,41 @@
 
             {% if total_pages > 1 %}
                 <div class="pager">
+                    <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page=1">First Page</a>
                     {% if page > 1 %}
-                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Prev Page</a>
                     {% endif %}
 
                     {% for p in range(start_page, end_page + 1) %}
                         {% if p == page %}
-                            <span class="current-page">{{ p }}</span>
+                            <form class="page-jump-form" action="{{ url_for('products') }}" method="GET">
+                                {% for key, values in request.args.lists() %}
+                                    {% if key != 'page' %}
+                                        {% for value in values %}
+                                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                        {% endfor %}
+                                    {% endif %}
+                                {% endfor %}
+                                <input
+                                    id="pageInputTop"
+                                    class="current-page page-jump-input"
+                                    type="number"
+                                    name="page"
+                                    min="1"
+                                    max="{{ total_pages }}"
+                                    value="{{ page }}"
+                                    aria-label="Current page"
+                                >
+                            </form>
                         {% else %}
                             <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                         {% endif %}
                     {% endfor %}
 
                     {% if page < total_pages %}
-                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next Page</a>
                     {% endif %}
+                    <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ total_pages }}">Last Page</a>
                 </div>
             {% endif %}
 
@@ -188,13 +178,60 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>
+                                <div class="value-header">
+                                    <span>Item</span>
+                                    <button
+                                        type="button"
+                                        class="value-help-btn"
+                                        aria-label="What does Item Name mean?"
+                                        data-tooltip="Shows the product name and the category-specific spec summary beneath it."
+                                    >
+                                        ?
+                                    </button>
+                                </div>
+                            </th>
                             {% if show_memory_analysis %}
-                                <th>Value</th>
-                                <th>Deal Quality</th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Value</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn"
+                                            aria-label="What does value mean?"
+                                            data-tooltip="Value is a normalized score based on price and performance. Higher numbers mean better value."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
                             {% endif %}
-                            <th>Item Name</th>
-                            <th>Latest Price</th>
-                            <th>Add to Build</th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Latest Price</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn"
+                                            aria-label="What does Latest Price mean?"
+                                            data-tooltip="Shows the most recent snapshot price from the price history for this product."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="value-header">
+                                        <span>Add to Build</span>
+                                        <button
+                                            type="button"
+                                            class="value-help-btn value-help-btn--align-right"
+                                            aria-label="What does Add to Build mean?"
+                                            data-tooltip="Adds the item to a savable build list so users can total up parts and manage a complete build."
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -202,10 +239,6 @@
                         {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
                         
                         <tr class="clickable-row" data-href="{{ history_url }}">
-                            {% if show_memory_analysis %}
-                                <td>{{ "{:,.3f}".format(item.value|float) if item.value is not none else 'N/A' }}</td>
-                                <td>{{ item.deal_quality if item.deal_quality else 'N/A' }}</td>
-                            {% endif %}
                             <td>
                                 <div class="product-name-cell">
                                     <a href="{{ history_url }}">{{ item.name }}</a>
@@ -214,9 +247,51 @@
                                     {% endif %}
                                 </div>
                             </td>
+                            {% if show_memory_analysis %}
+                                <td>
+                                    {% if item.value_normalized is not none %}
+                                        {% set value_score = item.value_normalized|float %}
+                                        {% set full_zaps = value_score|int %}
+                                        {% set fractional_hundred = (((value_score - full_zaps) * 100)|int) %}
+                                        {% set half_zaps = 0 %}
+                                        {% if fractional_hundred >= 75 %}
+                                            {% set full_zaps = full_zaps + 1 %}
+                                        {% elif fractional_hundred >= 26 and fractional_hundred < 76 %}
+                                            {% set half_zaps = 1 %}
+                                        {% endif %}
+                                        {% set full_zaps = [5, [0, full_zaps]|max]|min %}
+                                        {% if full_zaps == 5 %}
+                                            {% set half_zaps = 0 %}
+                                        {% endif %}
+                                        {% set empty_zaps = 5 - full_zaps - half_zaps %}
+                                        <div class="value-rating" aria-label="Value score {{ '{:,.3f}'.format(item.value_normalized|float) }}">
+                                            <div class="value-rating-icons" title="Representational Value Icons" aria-hidden="true">
+                                                {% for _ in range(full_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_full.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% for _ in range(half_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_half.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% for _ in range(empty_zaps) %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_empty.png') }}" alt="" class="value-zap-icon">
+                                                {% endfor %}
+                                                {% if value_score > 4.95 %}
+                                                    <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" title="Excellent Value Mark" alt="Extra Value" class="value-zap-icon value-zap-icon--extra">
+                                                {% endif %}
+                                            </div>
+                                                    <div class="value-rating-number-row">
+                                                        <div class="value-rating-number" title="Value is a normalized score based on price and performance">{{ "{:,.3f}".format(item.value_normalized|float) }}</div>
+                                                    </div>
+                                        </div>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                
+                            {% endif %}
                             <td>
                                 <div>${{ "{:,.2f}".format(item.price|float) if item.price else 'N/A' }}</div>
-                                <div class="price-snapshot-count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
+                                <div class="price-snapshot-count" title="Price Snapshot Count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
                             </td>
                             <td>
                                 <button
@@ -238,21 +313,41 @@
 
                 {% if total_pages > 1 %}
                     <div class="pager">
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page=1">First Page</a>
                         {% if page > 1 %}
-                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Previous 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page-1 }}">Prev Page</a>
                         {% endif %}
 
                         {% for p in range(start_page, end_page + 1) %}
                             {% if p == page %}
-                                <span class="current-page">{{ p }}</span>
+                                <form class="page-jump-form" action="{{ url_for('products') }}" method="GET">
+                                    {% for key, values in request.args.lists() %}
+                                        {% if key != 'page' %}
+                                            {% for value in values %}
+                                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    <input
+                                        id="pageInputBottom"
+                                        class="current-page page-jump-input"
+                                        type="number"
+                                        name="page"
+                                        min="1"
+                                        max="{{ total_pages }}"
+                                        value="{{ page }}"
+                                        aria-label="Current page"
+                                    >
+                                </form>
                             {% else %}
                                 <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ p }}">{{ p }}</a>
                             {% endif %}
                         {% endfor %}
 
                         {% if page < total_pages %}
-                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next 50</a>
+                            <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ page+1 }}">Next Page</a>
                         {% endif %}
+                        <a href="{{ url_for('products') }}?{{ pagination_query_string }}{% if pagination_query_string %}&{% endif %}page={{ total_pages }}">Last Page</a>
                     </div>
                 {% endif %}
             {% else %}
