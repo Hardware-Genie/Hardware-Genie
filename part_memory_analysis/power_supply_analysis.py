@@ -52,7 +52,7 @@ wattage_lists = {
 def analyze_wattage_groups(groups):
     results = {}
 
-    for tier, df in groups.items():
+    for wattage, df in groups.items():
         df = df.copy()  # avoid modifying original
 
         # Ensure numeric columns
