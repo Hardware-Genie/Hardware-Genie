@@ -43,13 +43,13 @@ efficiency_map = {
 # Create numeric efficiency column
 df["efficiency_numeric"] = df["efficiency_tier"].map(efficiency_map)
 
-# Create separate lists for each efficiency tier
-efficiency_lists = {
-    tier: group
-    for tier, group in df.groupby("efficiency_tier")
+# Create separate lists for each wattage level
+wattage_lists = {
+    wattage: group
+    for wattage, group in df.groupby("wattage")
 }
 
-def analyze_efficiency_groups(groups):
+def analyze_wattage_groups(groups):
     results = {}
 
     for tier, df in groups.items():
