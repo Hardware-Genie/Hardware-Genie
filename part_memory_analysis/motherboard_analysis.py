@@ -1,3 +1,8 @@
+# List of columns to add when displaying on website
+# "Number of Memory Slots" which can be called from ["memory_slots"]
+# "Socket Type" which can be called from ["socket"]
+# "Form Factor" which can be called from ["form_factor6"]
+
 import pandas as pd
 
 df = pd.read_csv("combined_motherboard.csv")
