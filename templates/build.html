@@ -4,7 +4,7 @@
 
 <section class="build-page" data-is-authenticated="{{ '1' if current_user.is_authenticated else '0' }}">
     <div class="build-page__topbar">
-        <a class="back-button" href="{{ url_for('index') }}">← Back</a>
+        <a class="back-button" id="buildBackButton" href="{{ url_for('index') }}">← Back</a>
         <h2>Build Planner</h2>
         <div class="build-page__actions">
             <button type="button" class="build-action-btn" id="saveBuildButton">Save Build</button>
@@ -87,6 +87,12 @@ const saveBuildNameInput = document.getElementById('saveBuildNameInput');
 const confirmSaveBuildButton = document.getElementById('confirmSaveBuildButton');
 const cancelSaveBuildButton = document.getElementById('cancelSaveBuildButton');
 const initialBuildId = new URLSearchParams(window.location.search).get('build_id');
+const returnTo = new URLSearchParams(window.location.search).get('return_to');
+const buildBackButton = document.getElementById('buildBackButton');
+
+if (buildBackButton && returnTo) {
+    buildBackButton.href = returnTo;
+}
 
 function getSavedParts() {
     try {
@@ -264,6 +270,8 @@ function normalizePartsByCategory(parts) {
             name: part.name || 'Unnamed part',
             price: part.price,
             specs: part.specs || '',
+            historyUrl: part.historyUrl || '',
+            valueNormalized: part.valueNormalized ?? part.value_normalized ?? part.value ?? null,
         };
     });
     return categoryMap;
@@ -481,6 +489,23 @@ function renderSavedList() {
         const row = document.createElement('div');
         row.className = 'build-slot-row';
 
+        const historyUrl = selectedPart.historyUrl || '';
+        if (historyUrl) {
+            row.classList.add('build-slot-row--clickable');
+            row.tabIndex = 0;
+            row.setAttribute('role', 'link');
+            row.setAttribute('aria-label', `Open product page for ${selectedPart.name}`);
+            row.addEventListener('click', () => {
+                window.location.href = historyUrl;
+            });
+            row.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    window.location.href = historyUrl;
+                }
+            });
+        }
+
         const detailsWrap = document.createElement('div');
         detailsWrap.className = 'build-slot-details';
 
@@ -508,7 +533,8 @@ function renderSavedList() {
         removeBtn.type = 'button';
         removeBtn.className = 'build-remove-btn build-slot-action';
         removeBtn.textContent = 'Remove';
-        removeBtn.addEventListener('click', () => {
+        removeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
             const updatedMap = normalizePartsByCategory(getSavedParts());
             delete updatedMap[categoryKey];
             persistNormalizedParts(updatedMap);

@@ -18,9 +18,16 @@
     <div class="container">
         <!-- Sidebar Filters -->
         <aside class="sidebar">
-            <h3>Filters</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+                <h3 style="margin: 0;">Filters</h3>
+                <div class="filter-actions" style="margin: 0;">
+                    <button type="submit" class="apply-filters-btn" form="filterForm">Apply Filters</button>
+                    <a href="{{ url_for('products', q=query) }}" class="reset-btn">Clear All</a>
+                </div>
+            </div>
             <form action="{{ url_for('products') }}" method="GET" id="filterForm">
                 <input type="hidden" name="q" value="{{ query }}">
+                <input type="hidden" name="category" value="{{ active_filters.get('category', '') }}">
                 
                 <!-- Category Filter -->
                 <div class="filter-section">
@@ -36,10 +43,13 @@
                                 ('internal_hard_drive', 'Internal Hard Drive')
                             ] %}
                             {% for val, label in categories %}
-                                <label class="filter-checkbox">
-                                    <input type="radio" name="category" value="{{ val }}" {% if active_filters.get('category') == val %}checked{% endif %}>
+                                <button
+                                    type="button"
+                                    class="filter-category-btn {% if active_filters.get('category') == val %}filter-category-btn--active{% endif %}"
+                                    data-category-value="{{ val }}"
+                                >
                                     {{ label }}
-                                </label>
+                                </button>
                             {% endfor %}
                         </div>
                     </details>
@@ -49,10 +59,23 @@
                     <details class="filter-collapsible" open>
                         <summary class="filter-header">Price Range</summary>
                         <div class="filter-options">
-                            <label class="filter-checkbox">Min Price</label>
-                            <input type="number" name="min_price" min="0" step="0.01" value="{{ min_price if min_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.min) }}">
-                            <label class="filter-checkbox">Max Price</label>
-                            <input type="number" name="max_price" min="0" step="0.01" value="{{ max_price if max_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.max) }}">
+                            <div class="dual-range-control" data-dual-range="price" data-min-bound="{{ price_range.min }}" data-max-bound="{{ price_range.max if price_range.max >= price_range.min else price_range.min }}" data-step="0.01">
+                                <div class="dual-range-control__inputs">
+                                    <div class="dual-range-control__input-group">
+                                        <label class="filter-checkbox" for="minPriceInput">Min Price</label>
+                                        <input id="minPriceInput" type="number" name="min_price" min="0" step="0.01" value="{{ min_price if min_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.min) }}" data-range-input="min">
+                                    </div>
+                                    <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                        <label class="filter-checkbox" for="maxPriceInput">Max Price</label>
+                                        <input id="maxPriceInput" type="number" name="max_price" min="0" step="0.01" value="{{ max_price if max_price is not none else '' }}" placeholder="{{ '%.2f'|format(price_range.max) }}" data-range-input="max">
+                                    </div>
+                                </div>
+                                <div class="dual-range-control__slider">
+                                    <div class="dual-range-control__track"></div>
+                                    <input id="minPriceSlider" type="range" min="{{ price_range.min }}" max="{{ price_range.max if price_range.max >= price_range.min else price_range.min }}" step="0.01" value="{{ min_price if min_price is not none else price_range.min }}" data-range-slider="min" aria-label="Minimum price slider">
+                                    <input id="maxPriceSlider" type="range" min="{{ price_range.min }}" max="{{ price_range.max if price_range.max >= price_range.min else price_range.min }}" step="0.01" value="{{ max_price if max_price is not none else price_range.max }}" data-range-slider="max" aria-label="Maximum price slider">
+                                </div>
+                            </div>
                         </div>
                     </details>
                 </div>
@@ -62,10 +85,151 @@
                         <details class="filter-collapsible" open>
                             <summary class="filter-header">Value Range</summary>
                             <div class="filter-options">
-                                <label class="filter-checkbox">Min Value</label>
-                                <input type="number" name="min_value" min="0" step="0.001" value="{{ min_value if min_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.min) }}">
-                                <label class="filter-checkbox">Max Value</label>
-                                <input type="number" name="max_value" min="0" step="0.001" value="{{ max_value if max_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.max) }}">
+                                <div class="dual-range-control" data-dual-range="value" data-min-bound="{{ value_range.min }}" data-max-bound="{{ value_range.max if value_range.max >= value_range.min else value_range.min }}" data-step="0.001">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minValueInput">Min Value</label>
+                                            <input id="minValueInput" type="number" name="min_value" min="0" step="0.001" value="{{ min_value if min_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.min) }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxValueInput">Max Value</label>
+                                            <input id="maxValueInput" type="number" name="max_value" min="0" step="0.001" value="{{ max_value if max_value is not none else '' }}" placeholder="{{ '%.3f'|format(value_range.max) }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minValueSlider" type="range" min="{{ value_range.min }}" max="{{ value_range.max if value_range.max >= value_range.min else value_range.min }}" step="0.001" value="{{ min_value if min_value is not none else value_range.min }}" data-range-slider="min" aria-label="Minimum value slider">
+                                        <input id="maxValueSlider" type="range" min="{{ value_range.min }}" max="{{ value_range.max if value_range.max >= value_range.min else value_range.min }}" step="0.001" value="{{ max_value if max_value is not none else value_range.max }}" data-range-slider="max" aria-label="Maximum value slider">
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                {% endif %}
+
+                {% if selected_category == 'memory' %}
+                    <div class="filter-section">
+                        <details class="filter-collapsible" open>
+                            <summary class="filter-header">Speed</summary>
+                            <div class="filter-options">
+                                <div class="dual-range-control" data-dual-range="speed-ddr-type" data-min-bound="{{ speed_ddr_type_range.min }}" data-max-bound="{{ speed_ddr_type_range.max if speed_ddr_type_range.max >= speed_ddr_type_range.min else speed_ddr_type_range.min }}" data-step="1">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minSpeedDdrTypeInput">Min DDR Type</label>
+                                            <input id="minSpeedDdrTypeInput" type="number" name="min_speed_ddr_type" min="0" step="1" value="{{ min_speed_ddr_type if min_speed_ddr_type is not none else '' }}" placeholder="{{ speed_ddr_type_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxSpeedDdrTypeInput">Max DDR Type</label>
+                                            <input id="maxSpeedDdrTypeInput" type="number" name="max_speed_ddr_type" min="0" step="1" value="{{ max_speed_ddr_type if max_speed_ddr_type is not none else '' }}" placeholder="{{ speed_ddr_type_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minSpeedDdrTypeSlider" type="range" min="{{ speed_ddr_type_range.min }}" max="{{ speed_ddr_type_range.max if speed_ddr_type_range.max >= speed_ddr_type_range.min else speed_ddr_type_range.min }}" step="1" value="{{ min_speed_ddr_type if min_speed_ddr_type is not none else speed_ddr_type_range.min }}" data-range-slider="min" aria-label="Minimum DDR type slider">
+                                        <input id="maxSpeedDdrTypeSlider" type="range" min="{{ speed_ddr_type_range.min }}" max="{{ speed_ddr_type_range.max if speed_ddr_type_range.max >= speed_ddr_type_range.min else speed_ddr_type_range.min }}" step="1" value="{{ max_speed_ddr_type if max_speed_ddr_type is not none else speed_ddr_type_range.max }}" data-range-slider="max" aria-label="Maximum DDR type slider">
+                                    </div>
+                                </div>
+                                <div class="dual-range-control" data-dual-range="speed-mhz" data-min-bound="{{ speed_mhz_range.min }}" data-max-bound="{{ speed_mhz_range.max if speed_mhz_range.max >= speed_mhz_range.min else speed_mhz_range.min }}" data-step="1">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minSpeedMhzInput">Min MHz</label>
+                                            <input id="minSpeedMhzInput" type="number" name="min_speed_mhz" min="0" step="1" value="{{ min_speed_mhz if min_speed_mhz is not none else '' }}" placeholder="{{ speed_mhz_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxSpeedMhzInput">Max MHz</label>
+                                            <input id="maxSpeedMhzInput" type="number" name="max_speed_mhz" min="0" step="1" value="{{ max_speed_mhz if max_speed_mhz is not none else '' }}" placeholder="{{ speed_mhz_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minSpeedMhzSlider" type="range" min="{{ speed_mhz_range.min }}" max="{{ speed_mhz_range.max if speed_mhz_range.max >= speed_mhz_range.min else speed_mhz_range.min }}" step="1" value="{{ min_speed_mhz if min_speed_mhz is not none else speed_mhz_range.min }}" data-range-slider="min" aria-label="Minimum memory speed slider">
+                                        <input id="maxSpeedMhzSlider" type="range" min="{{ speed_mhz_range.min }}" max="{{ speed_mhz_range.max if speed_mhz_range.max >= speed_mhz_range.min else speed_mhz_range.min }}" step="1" value="{{ max_speed_mhz if max_speed_mhz is not none else speed_mhz_range.max }}" data-range-slider="max" aria-label="Maximum memory speed slider">
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="filter-section">
+                        <details class="filter-collapsible" open>
+                            <summary class="filter-header">Modules</summary>
+                            <div class="filter-options">
+                                <div class="dual-range-control" data-dual-range="modules-count" data-min-bound="{{ module_count_range.min }}" data-max-bound="{{ module_count_range.max if module_count_range.max >= module_count_range.min else module_count_range.min }}" data-step="1">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minModulesCountInput">Min Count</label>
+                                            <input id="minModulesCountInput" type="number" name="min_modules_count" min="0" step="1" value="{{ min_modules_count if min_modules_count is not none else '' }}" placeholder="{{ module_count_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxModulesCountInput">Max Count</label>
+                                            <input id="maxModulesCountInput" type="number" name="max_modules_count" min="0" step="1" value="{{ max_modules_count if max_modules_count is not none else '' }}" placeholder="{{ module_count_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minModulesCountSlider" type="range" min="{{ module_count_range.min }}" max="{{ module_count_range.max if module_count_range.max >= module_count_range.min else module_count_range.min }}" step="1" value="{{ min_modules_count if min_modules_count is not none else module_count_range.min }}" data-range-slider="min" aria-label="Minimum module count slider">
+                                        <input id="maxModulesCountSlider" type="range" min="{{ module_count_range.min }}" max="{{ module_count_range.max if module_count_range.max >= module_count_range.min else module_count_range.min }}" step="1" value="{{ max_modules_count if max_modules_count is not none else module_count_range.max }}" data-range-slider="max" aria-label="Maximum module count slider">
+                                    </div>
+                                </div>
+                                <div class="dual-range-control" data-dual-range="modules-size" data-min-bound="{{ module_size_range.min }}" data-max-bound="{{ module_size_range.max if module_size_range.max >= module_size_range.min else module_size_range.min }}" data-step="1">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minModulesSizeInput">Min Size</label>
+                                            <input id="minModulesSizeInput" type="number" name="min_modules_size" min="0" step="1" value="{{ min_modules_size if min_modules_size is not none else '' }}" placeholder="{{ module_size_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxModulesSizeInput">Max Size</label>
+                                            <input id="maxModulesSizeInput" type="number" name="max_modules_size" min="0" step="1" value="{{ max_modules_size if max_modules_size is not none else '' }}" placeholder="{{ module_size_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minModulesSizeSlider" type="range" min="{{ module_size_range.min }}" max="{{ module_size_range.max if module_size_range.max >= module_size_range.min else module_size_range.min }}" step="1" value="{{ min_modules_size if min_modules_size is not none else module_size_range.min }}" data-range-slider="min" aria-label="Minimum module size slider">
+                                        <input id="maxModulesSizeSlider" type="range" min="{{ module_size_range.min }}" max="{{ module_size_range.max if module_size_range.max >= module_size_range.min else module_size_range.min }}" step="1" value="{{ max_modules_size if max_modules_size is not none else module_size_range.max }}" data-range-slider="max" aria-label="Maximum module size slider">
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="filter-section">
+                        <details class="filter-collapsible" open>
+                            <summary class="filter-header">Latency</summary>
+                            <div class="filter-options">
+                                <div class="dual-range-control" data-dual-range="cas-latency" data-min-bound="{{ cas_latency_range.min }}" data-max-bound="{{ cas_latency_range.max if cas_latency_range.max >= cas_latency_range.min else cas_latency_range.min }}" data-step="0.001">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minCasLatencyInput">Min CAS Latency</label>
+                                            <input id="minCasLatencyInput" type="number" name="min_cas_latency" min="0" step="0.001" value="{{ min_cas_latency if min_cas_latency is not none else '' }}" placeholder="{{ cas_latency_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxCasLatencyInput">Max CAS Latency</label>
+                                            <input id="maxCasLatencyInput" type="number" name="max_cas_latency" min="0" step="0.001" value="{{ max_cas_latency if max_cas_latency is not none else '' }}" placeholder="{{ cas_latency_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minCasLatencySlider" type="range" min="{{ cas_latency_range.min }}" max="{{ cas_latency_range.max if cas_latency_range.max >= cas_latency_range.min else cas_latency_range.min }}" step="0.001" value="{{ min_cas_latency if min_cas_latency is not none else cas_latency_range.min }}" data-range-slider="min" aria-label="Minimum CAS latency slider">
+                                        <input id="maxCasLatencySlider" type="range" min="{{ cas_latency_range.min }}" max="{{ cas_latency_range.max if cas_latency_range.max >= cas_latency_range.min else cas_latency_range.min }}" step="0.001" value="{{ max_cas_latency if max_cas_latency is not none else cas_latency_range.max }}" data-range-slider="max" aria-label="Maximum CAS latency slider">
+                                    </div>
+                                </div>
+                                <div class="dual-range-control" data-dual-range="first-word-latency" data-min-bound="{{ first_word_latency_range.min }}" data-max-bound="{{ first_word_latency_range.max if first_word_latency_range.max >= first_word_latency_range.min else first_word_latency_range.min }}" data-step="0.001">
+                                    <div class="dual-range-control__inputs">
+                                        <div class="dual-range-control__input-group">
+                                            <label class="filter-checkbox" for="minFirstWordLatencyInput">Min First Word Latency</label>
+                                            <input id="minFirstWordLatencyInput" type="number" name="min_first_word_latency" min="0" step="0.001" value="{{ min_first_word_latency if min_first_word_latency is not none else '' }}" placeholder="{{ first_word_latency_range.min }}" data-range-input="min">
+                                        </div>
+                                        <div class="dual-range-control__input-group dual-range-control__input-group--end">
+                                            <label class="filter-checkbox" for="maxFirstWordLatencyInput">Max First Word Latency</label>
+                                            <input id="maxFirstWordLatencyInput" type="number" name="max_first_word_latency" min="0" step="0.001" value="{{ max_first_word_latency if max_first_word_latency is not none else '' }}" placeholder="{{ first_word_latency_range.max }}" data-range-input="max">
+                                        </div>
+                                    </div>
+                                    <div class="dual-range-control__slider">
+                                        <div class="dual-range-control__track"></div>
+                                        <input id="minFirstWordLatencySlider" type="range" min="{{ first_word_latency_range.min }}" max="{{ first_word_latency_range.max if first_word_latency_range.max >= first_word_latency_range.min else first_word_latency_range.min }}" step="0.001" value="{{ min_first_word_latency if min_first_word_latency is not none else first_word_latency_range.min }}" data-range-slider="min" aria-label="Minimum first word latency slider">
+                                        <input id="maxFirstWordLatencySlider" type="range" min="{{ first_word_latency_range.min }}" max="{{ first_word_latency_range.max if first_word_latency_range.max >= first_word_latency_range.min else first_word_latency_range.min }}" step="0.001" value="{{ max_first_word_latency if max_first_word_latency is not none else first_word_latency_range.max }}" data-range-slider="max" aria-label="Maximum first word latency slider">
+                                    </div>
+                                </div>
                             </div>
                         </details>
                     </div>
@@ -236,7 +400,7 @@
                     </thead>
                     <tbody>
                         {% for item in results %}
-                        {% set history_url = url_for('item_history', table_type=item.table_name, **item.identity_params) %}
+                        {% set history_url = url_for('item_history', table_type=item.table_name, value_normalized=item.value_normalized, **item.identity_params) %}
                         
                         <tr class="clickable-row" data-href="{{ history_url }}">
                             <td>
@@ -265,6 +429,7 @@
                                         {% endif %}
                                         {% set empty_zaps = 5 - full_zaps - half_zaps %}
                                         <div class="value-rating" aria-label="Value score {{ '{:,.3f}'.format(item.value_normalized|float) }}">
+                                            
                                             <div class="value-rating-icons" title="Representational Value Icons" aria-hidden="true">
                                                 {% for _ in range(full_zaps) %}
                                                     <img src="{{ url_for('static', filename='images/value_zap_full.png') }}" alt="" class="value-zap-icon">
@@ -275,12 +440,13 @@
                                                 {% for _ in range(empty_zaps) %}
                                                     <img src="{{ url_for('static', filename='images/value_zap_empty.png') }}" alt="" class="value-zap-icon">
                                                 {% endfor %}
-                                                {% if value_score > 4.95 %}
-                                                    <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" title="Excellent Value Mark" alt="Extra Value" class="value-zap-icon value-zap-icon--extra">
-                                                {% endif %}
                                             </div>
+                                            <!-- <progress class="value-progress" title = "Bar to show value score range" value="{{ item.value_normalized|float }}" max="5"></progress> -->
                                                     <div class="value-rating-number-row">
                                                         <div class="value-rating-number" title="Value is a normalized score based on price and performance">{{ "{:,.3f}".format(item.value_normalized|float) }}</div>
+                                                        {% if value_score > 4.95 %}
+                                                            <img src="{{ url_for('static', filename='images/value_zap_extra.png') }}" title="Excellent Value Mark" alt="Extra Value" class="value-zap-icon value-zap-icon--extra">
+                                                        {% endif %}
                                                     </div>
                                         </div>
                                     {% else %}
@@ -294,6 +460,7 @@
                                 <div class="price-snapshot-count" title="Price Snapshot Count">({{ item.snapshot_count if item.snapshot_count is not none else 0 }})</div>
                             </td>
                             <td>
+                                <!-- <div class="swap-value-note" style="display: none; margin: 0 0 6px; font-size: 0.9rem; font-weight: 600;"></div> -->
                                 <button
                                     type="button"
                                     class="add-to-build-btn"
@@ -301,7 +468,9 @@
                                     data-category-label="{{ item.type_label }}"
                                     data-name="{{ item.name }}"
                                     data-price="{{ item.price if item.price is not none else '' }}"
+                                    data-value-normalized="{{ item.value_normalized if item.value_normalized is not none else '' }}"
                                     data-specs="{{ item.spec_summary if item.spec_summary else '' }}"
+                                    data-history-url="{{ history_url }}"
                                 >
                                     Add
                                 </button>
@@ -391,9 +560,39 @@ function normalizePartsByCategory(parts) {
             name: part.name || 'Unnamed part',
             price: part.price,
             specs: part.specs || '',
+            historyUrl: part.historyUrl || '',
+            valueNormalized: part.valueNormalized ?? part.value_normalized ?? part.value ?? null,
         };
     });
     return categoryMap;
+}
+
+function parseValueScore(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeSpecSignature(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function partsMatch(existingPart, partName, partSpecs) {
+    if (!existingPart) {
+        return false;
+    }
+
+    return normalizeSpecSignature(existingPart.name) === normalizeSpecSignature(partName)
+        && normalizeSpecSignature(existingPart.specs) === normalizeSpecSignature(partSpecs);
+}
+
+function getValueComparisonText(currentValue, existingValue) {
+    if (!Number.isFinite(currentValue) || !Number.isFinite(existingValue) || currentValue === existingValue || existingValue === 0) {
+        return '';
+    }
+
+    const percentDifference = Math.abs(((currentValue - existingValue) / existingValue) * 100);
+    const direction = currentValue > existingValue ? 'better' : 'worse';
+    return `${percentDifference.toFixed(1)}% ${direction} value than current part`;
 }
 
 function parsePrice(value) {
@@ -403,6 +602,251 @@ function parsePrice(value) {
     }
     const parsed = Number(raw);
     return Number.isNaN(parsed) ? null : parsed;
+}
+
+function buildFilterParams(formElement, overrides = {}) {
+    const formData = new FormData(formElement);
+    const params = new URLSearchParams();
+    const currentParams = new URLSearchParams(window.location.search);
+
+    if (currentParams.has('q')) {
+        params.append('q', currentParams.get('q'));
+    }
+    if (currentParams.has('sort')) {
+        params.append('sort', currentParams.get('sort'));
+    }
+    if (currentParams.has('from_build')) {
+        params.append('from_build', currentParams.get('from_build'));
+    }
+
+    for (const [name, value] of formData.entries()) {
+        if (value !== '') {
+            params.append(name, value);
+        }
+    }
+
+    Object.entries(overrides).forEach(([name, value]) => {
+        params.delete(name);
+        if (value !== '' && value !== null && value !== undefined) {
+            params.set(name, value);
+        }
+    });
+
+    return params;
+}
+
+function parseMaybeNumber(value) {
+    if (value === '' || value === null || value === undefined) {
+        return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setupDualRangeControl(control) {
+    const minInput = control.querySelector('[data-range-input="min"]');
+    const maxInput = control.querySelector('[data-range-input="max"]');
+    const minSlider = control.querySelector('[data-range-slider="min"]');
+    const maxSlider = control.querySelector('[data-range-slider="max"]');
+
+    if (!minInput || !maxInput || !minSlider || !maxSlider) {
+        return;
+    }
+
+    const lowerBound = Number(control.dataset.minBound);
+    const upperBound = Number(control.dataset.maxBound);
+    const step = control.dataset.step || '1';
+
+    if (!Number.isFinite(lowerBound) || !Number.isFinite(upperBound)) {
+        return;
+    }
+
+    minSlider.min = String(lowerBound);
+    minSlider.max = String(upperBound);
+    minSlider.step = step;
+    maxSlider.min = String(lowerBound);
+    maxSlider.max = String(upperBound);
+    maxSlider.step = step;
+
+    const sliderWrap = control.querySelector('.dual-range-control__slider');
+    if (!sliderWrap) {
+        return;
+    }
+
+    const clamp = (value) => Math.min(Math.max(value, lowerBound), upperBound);
+    const rangeSpan = upperBound - lowerBound || 1;
+    let activeRole = 'max';
+    let isDragging = false;
+
+    const updateFill = () => {
+        const minValue = parseMaybeNumber(minInput.value) ?? lowerBound;
+        const maxValue = parseMaybeNumber(maxInput.value) ?? upperBound;
+        const fillStart = ((Math.min(minValue, maxValue) - lowerBound) / rangeSpan) * 100;
+        const fillEnd = ((Math.max(minValue, maxValue) - lowerBound) / rangeSpan) * 100;
+
+        control.style.setProperty('--dual-range-fill-start', `${Math.max(0, Math.min(fillStart, 100))}%`);
+        control.style.setProperty('--dual-range-fill-end', `${Math.max(0, Math.min(fillEnd, 100))}%`);
+    };
+
+    const setStacking = (role) => {
+        activeRole = role;
+        if (role === 'min') {
+            minSlider.style.zIndex = '3';
+            maxSlider.style.zIndex = '2';
+        } else {
+            minSlider.style.zIndex = '2';
+            maxSlider.style.zIndex = '3';
+        }
+    };
+
+    const valueFromClientX = (clientX) => {
+        const rect = sliderWrap.getBoundingClientRect();
+        const ratio = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+        return clamp(lowerBound + (Math.min(Math.max(ratio, 0), 1) * rangeSpan));
+    };
+
+    const snapToStep = (value) => {
+        const numericStep = Number(step) || 1;
+        const snapped = Math.round((value - lowerBound) / numericStep) * numericStep + lowerBound;
+        const decimals = String(numericStep).includes('.') ? String(numericStep).split('.')[1].length : 0;
+        return Number(snapped.toFixed(decimals));
+    };
+
+    const initializeFromInputs = () => {
+        const currentMin = parseMaybeNumber(minInput.value);
+        const currentMax = parseMaybeNumber(maxInput.value);
+
+        minSlider.value = String(currentMin !== null ? clamp(currentMin) : lowerBound);
+        maxSlider.value = String(currentMax !== null ? clamp(currentMax) : upperBound);
+
+        if (currentMin !== null && currentMax !== null) {
+            setStacking(currentMin >= currentMax ? 'min' : 'max');
+        } else if (currentMin !== null) {
+            setStacking('min');
+        } else {
+            setStacking('max');
+        }
+
+        updateFill();
+    };
+
+    const syncFromInputs = (activeRole) => {
+        let minValue = parseMaybeNumber(minInput.value);
+        let maxValue = parseMaybeNumber(maxInput.value);
+
+        if (minValue !== null) {
+            minValue = clamp(minValue);
+            minInput.value = String(minValue);
+            minSlider.value = String(minValue);
+        } else {
+            minSlider.value = String(lowerBound);
+        }
+
+        if (maxValue !== null) {
+            maxValue = clamp(maxValue);
+            maxInput.value = String(maxValue);
+            maxSlider.value = String(maxValue);
+        } else {
+            maxSlider.value = String(upperBound);
+        }
+
+        if (minValue !== null && maxValue !== null && minValue > maxValue) {
+            if (activeRole === 'min') {
+                minValue = maxValue;
+                minInput.value = String(minValue);
+                minSlider.value = String(minValue);
+            } else {
+                maxValue = minValue;
+                maxInput.value = String(maxValue);
+                maxSlider.value = String(maxValue);
+            }
+        }
+
+        setStacking(activeRole);
+        updateFill();
+    };
+
+    const commitInput = (activeRole) => {
+        const targetInput = activeRole === 'min' ? minInput : maxInput;
+        if (targetInput.value.trim() === '') {
+            updateFill();
+            return;
+        }
+
+        syncFromInputs(activeRole);
+    };
+
+    const syncFromPointer = (clientX) => {
+        const pointerValue = snapToStep(valueFromClientX(clientX));
+
+        if (activeRole === 'min') {
+            const maxValue = parseMaybeNumber(maxInput.value);
+            const limitedValue = maxValue !== null ? Math.min(pointerValue, maxValue) : pointerValue;
+            minInput.value = String(clamp(limitedValue));
+            minSlider.value = String(clamp(limitedValue));
+        } else {
+            const minValue = parseMaybeNumber(minInput.value);
+            const limitedValue = minValue !== null ? Math.max(pointerValue, minValue) : pointerValue;
+            maxInput.value = String(clamp(limitedValue));
+            maxSlider.value = String(clamp(limitedValue));
+        }
+
+        updateFill();
+    };
+
+    minInput.addEventListener('change', () => commitInput('min'));
+    maxInput.addEventListener('change', () => commitInput('max'));
+    minInput.addEventListener('blur', () => commitInput('min'));
+    maxInput.addEventListener('blur', () => commitInput('max'));
+    minInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitInput('min');
+            minInput.blur();
+        }
+    });
+    maxInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitInput('max');
+            maxInput.blur();
+        }
+    });
+
+    const startDrag = (event) => {
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+
+        event.preventDefault();
+        const minValue = parseMaybeNumber(minInput.value) ?? lowerBound;
+        const maxValue = parseMaybeNumber(maxInput.value) ?? upperBound;
+        const clickValue = valueFromClientX(event.clientX);
+        activeRole = Math.abs(clickValue - minValue) <= Math.abs(clickValue - maxValue) ? 'min' : 'max';
+        setStacking(activeRole);
+        isDragging = true;
+        syncFromPointer(event.clientX);
+    };
+
+    const moveDrag = (event) => {
+        if (!isDragging) {
+            return;
+        }
+
+        event.preventDefault();
+        syncFromPointer(event.clientX);
+    };
+
+    const stopDrag = () => {
+        isDragging = false;
+    };
+
+    sliderWrap.addEventListener('pointerdown', startDrag);
+    window.addEventListener('pointermove', moveDrag);
+    window.addEventListener('pointerup', stopDrag);
+
+    initializeFromInputs();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -461,34 +905,35 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Handle multiselect checkbox serialization
     const filterForm = document.getElementById('filterForm');
+    const categoryInput = filterForm ? filterForm.querySelector('input[name="category"]') : null;
     if (filterForm) {
         filterForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            const formData = new FormData(filterForm);
-            const params = new URLSearchParams();
-            
-            // Add query and preserve sort parameter
-            const currentParams = new URLSearchParams(window.location.search);
-            if (currentParams.has('q')) {
-                params.append('q', currentParams.get('q'));
-            }
-            if (currentParams.has('sort')) {
-                params.append('sort', currentParams.get('sort'));
-            }
-            if (currentParams.has('from_build')) {
-                params.append('from_build', currentParams.get('from_build'));
-            }
-            
-            for (const [name, value] of formData.entries()) {
-                if (value !== '') {
-                    params.append(name, value);
-                }
-            }
-            
+            const params = buildFilterParams(filterForm);
             window.location.href = window.location.pathname + '?' + params.toString();
         });
     }
+
+    const categoryButtons = document.querySelectorAll('.filter-category-btn');
+    categoryButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            if (!filterForm) {
+                return;
+            }
+
+            const categoryValue = button.dataset.categoryValue || '';
+            if (categoryInput) {
+                categoryInput.value = categoryValue;
+            }
+            const params = buildFilterParams(filterForm, {
+                category: categoryValue,
+                page: '1',
+            });
+            window.location.href = window.location.pathname + '?' + params.toString();
+        });
+    });
+
+    document.querySelectorAll('.dual-range-control').forEach((control) => setupDualRangeControl(control));
 
     const addButtons = document.querySelectorAll('.add-to-build-btn');
     let categoryMap = normalizePartsByCategory(getSavedParts());
@@ -497,17 +942,34 @@ document.addEventListener("DOMContentLoaded", () => {
     addButtons.forEach((button) => {
         const categoryKey = button.dataset.categoryKey || '';
         const partName = button.dataset.name || '';
+        const partSpecs = button.dataset.specs || '';
+        const currentValue = parseValueScore(button.dataset.valueNormalized);
         const existing = categoryMap[categoryKey];
+        const noteElement = button.parentElement ? button.parentElement.querySelector('.swap-value-note') : null;
 
-        if (existing && existing.name === partName) {
-            button.textContent = 'Added';
-            button.disabled = true;
+        if (noteElement) {
+            noteElement.style.display = 'none';
+            noteElement.textContent = '';
+        }
+
+        if (partsMatch(existing, partName, partSpecs)) {
+            button.textContent = 'Added Go to Build';
+            button.disabled = false;
             return;
         }
 
-        if (existing && existing.name !== partName) {
-            button.textContent = 'Category Filled';
-            button.disabled = true;
+        if (existing) {
+            button.textContent = 'Swap Part';
+            button.disabled = false;
+
+            if (noteElement) {
+                const existingValue = parseValueScore(existing.valueNormalized);
+                const comparisonText = getValueComparisonText(currentValue, existingValue);
+                if (comparisonText) {
+                    noteElement.textContent = comparisonText;
+                    noteElement.style.display = 'block';
+                }
+            }
             return;
         }
     });
@@ -517,18 +979,19 @@ document.addEventListener("DOMContentLoaded", () => {
             categoryMap = normalizePartsByCategory(getSavedParts());
             const categoryKey = button.dataset.categoryKey || '';
             const partName = button.dataset.name || '';
+            const partSpecs = button.dataset.specs || '';
             const existing = categoryMap[categoryKey];
 
-            if (existing && existing.name === partName) {
-                button.textContent = 'Added';
-                button.disabled = true;
+            if (partsMatch(existing, partName, partSpecs)) {
+                button.textContent = 'Added Go to Build';
+                button.disabled = false;
+                const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = "{{ url_for('build_page') }}" + '?return_to=' + returnTo;
                 return;
             }
 
-            if (existing && existing.name !== partName) {
-                button.textContent = 'Category Filled';
-                button.disabled = true;
-                return;
+            if (existing) {
+                button.textContent = 'Swap Part';
             }
 
             categoryMap[categoryKey] = {
@@ -536,10 +999,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 categoryLabel: button.dataset.categoryLabel || 'Part',
                 name: button.dataset.name || 'Unnamed part',
                 price: parsePrice(button.dataset.price),
+                valueNormalized: parseValueScore(button.dataset.valueNormalized),
                 specs: button.dataset.specs || '',
+                historyUrl: button.dataset.historyUrl || '',
             };
             setSavedParts(Object.values(categoryMap));
-            window.location.href = "{{ url_for('build_page') }}";
+            const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = "{{ url_for('build_page') }}" + '?return_to=' + returnTo;
         });
     });
 });

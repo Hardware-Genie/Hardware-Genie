@@ -42,46 +42,46 @@ from scrapy.crawler import CrawlerProcess
 #
 # This is for the old data from the github instead of our scraper
 #
-class csv_data_reader:
-    def __init__(self, labels, price):
-        self.labels = labels
-        self.price = price
+# class csv_data_reader:
+#     def __init__(self, labels, price):
+#         self.labels = labels
+#         self.price = price
 
-    def from_csv(self, file_name, sort, ascending):
-        csv_path = f'static/data/{file_name}.csv'
-        df = pd.read_csv(csv_path)
-        df = df.dropna(subset=['price'])
-        df = df.sort_values(by=sort, ascending=ascending)
-        self.labels = df['name'].tolist()
-        self.price = df['price'].tolist()
-        # print(df['price'].median())
+#     def from_csv(self, file_name, sort, ascending):
+#         csv_path = f'static/data/{file_name}.csv'
+#         df = pd.read_csv(csv_path)
+#         df = df.dropna(subset=['price'])
+#         df = df.sort_values(by=sort, ascending=ascending)
+#         self.labels = df['name'].tolist()
+#         self.price = df['price'].tolist()
+#         # print(df['price'].median())
 
-    def to_dict(self):
-        return {
-            'labels': self.labels,
-            'price': self.price,
-        }
+#     def to_dict(self):
+#         return {
+#             'labels': self.labels,
+#             'price': self.price,
+#         }
 
-cpu_csv_reader = csv_data_reader([], [])
-cpu_csv_reader.from_csv('July 23 2025/cpu', 'price', True)
+# cpu_csv_reader = csv_data_reader([], [])
+# cpu_csv_reader.from_csv('July 23 2025/cpu', 'price', True)
 
-memory_csv_reader = csv_data_reader([], [])
-memory_csv_reader.from_csv('July 23 2025/memory', 'price', True)
+# memory_csv_reader = csv_data_reader([], [])
+# memory_csv_reader.from_csv('July 23 2025/memory', 'price', True)
 
-gpu_csv_reader = csv_data_reader([], [])
-gpu_csv_reader.from_csv('July 23 2025/video-card', 'price', True)
+# gpu_csv_reader = csv_data_reader([], [])
+# gpu_csv_reader.from_csv('July 23 2025/video-card', 'price', True)
 
-gpu_csv_reader_sort = csv_data_reader([], [])
-gpu_csv_reader_sort.from_csv('July 23 2025/video-card', 'price', False)
+# gpu_csv_reader_sort = csv_data_reader([], [])
+# gpu_csv_reader_sort.from_csv('July 23 2025/video-card', 'price', False)
 
-storage_csv_reader = csv_data_reader([], [])
-storage_csv_reader.from_csv('July 23 2025/internal-hard-drive', 'price', True)
+# storage_csv_reader = csv_data_reader([], [])
+# storage_csv_reader.from_csv('July 23 2025/internal-hard-drive', 'price', True)
 
-mb_csv_reader = csv_data_reader([], [])
-mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
+# mb_csv_reader = csv_data_reader([], [])
+# mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
 
-psu_csv_reader = csv_data_reader([], [])
-psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
+# psu_csv_reader = csv_data_reader([], [])
+# psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
 # end of the old data reader
 
 # This is for the new data from our scraper
@@ -125,6 +125,85 @@ def _normalize_memory_label(value):
     if value is None:
         return None
     return re.sub(r'\s*,\s*', ',', str(value).strip())
+
+
+def _parse_memory_modules(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*[,xX]\s*(\d+(?:\.\d+)?)\s*(TB|GB)?', text)
+    if not match:
+        numbers = re.findall(r'\d+(?:\.\d+)?', text)
+        if len(numbers) < 2:
+            return None
+        match = (numbers[0], numbers[1], re.search(r'(TB|GB)', text, re.I).group(1) if re.search(r'(TB|GB)', text, re.I) else 'GB')
+        count_text, size_text, unit_text = match
+    else:
+        count_text, size_text, unit_text = match.group(1), match.group(2), match.group(3) or 'GB'
+
+    try:
+        module_count = float(count_text)
+        module_size = float(size_text)
+    except (TypeError, ValueError):
+        return None
+
+    unit = str(unit_text or 'GB').upper()
+    if unit == 'TB':
+        module_size *= 1024
+
+    return {
+        'count': module_count,
+        'size': module_size,
+    }
+
+
+def _parse_memory_speed(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    numbers = re.findall(r'\d+(?:\.\d+)?', text)
+    if len(numbers) < 2:
+        return None
+
+    try:
+        ddr_type = float(numbers[0])
+        mhz = float(numbers[1])
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        'ddr_type': ddr_type,
+        'mhz': mhz,
+    }
+
+
+def _parse_memory_latency(value):
+    if value is None:
+        return None
+
+    text = str(value).strip().replace(',', '')
+    if not text:
+        return None
+
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        numbers = re.findall(r'\d+(?:\.\d+)?', text)
+        if not numbers:
+            return None
+
+        try:
+            return float(numbers[0])
+        except (TypeError, ValueError):
+            return None
 
 
 CATEGORY_FILTER_PRIORITY = {
@@ -623,11 +702,23 @@ def search():
     max_price = request.args.get('max_price', type=float)
     min_value = request.args.get('min_value', type=float)
     max_value = request.args.get('max_value', type=float)
+    min_modules_count = request.args.get('min_modules_count', type=float)
+    max_modules_count = request.args.get('max_modules_count', type=float)
+    min_modules_size = request.args.get('min_modules_size', type=float)
+    max_modules_size = request.args.get('max_modules_size', type=float)
+    min_speed_ddr_type = request.args.get('min_speed_ddr_type', type=float)
+    max_speed_ddr_type = request.args.get('max_speed_ddr_type', type=float)
+    min_speed_mhz = request.args.get('min_speed_mhz', type=float)
+    max_speed_mhz = request.args.get('max_speed_mhz', type=float)
+    min_cas_latency = request.args.get('min_cas_latency', type=float)
+    max_cas_latency = request.args.get('max_cas_latency', type=float)
+    min_first_word_latency = request.args.get('min_first_word_latency', type=float)
+    max_first_word_latency = request.args.get('max_first_word_latency', type=float)
     per_page = 50
     active_filter_values = {
         key: [value for value in values if value]
         for key, values in request.args.lists()
-        if key not in ['q', 'page', 'sort', 'min_price', 'max_price', 'min_value', 'max_value', 'from_build']
+        if key not in ['q', 'page', 'sort', 'min_price', 'max_price', 'min_value', 'max_value', 'min_modules_count', 'max_modules_count', 'min_modules_size', 'max_modules_size', 'min_speed_ddr_type', 'max_speed_ddr_type', 'min_speed_mhz', 'max_speed_mhz', 'min_cas_latency', 'max_cas_latency', 'min_first_word_latency', 'max_first_word_latency', 'from_build']
     }
     selected_category = active_filter_values.get('category', [None])[0] if 'category' in active_filter_values else None
     if selected_category:
@@ -639,11 +730,17 @@ def search():
     filter_options = {}
     price_range = {'min': float('inf'), 'max': 0}
     value_range = {'min': float('inf'), 'max': 0}
+    module_count_range = {'min': float('inf'), 'max': 0}
+    module_size_range = {'min': float('inf'), 'max': 0}
+    speed_ddr_type_range = {'min': float('inf'), 'max': 0}
+    speed_mhz_range = {'min': float('inf'), 'max': 0}
+    cas_latency_range = {'min': float('inf'), 'max': 0}
+    first_word_latency_range = {'min': float('inf'), 'max': 0}
     value_samples_by_table = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
     grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
-    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count']
+    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count', 'modules', 'speed', 'cas_latency', 'first_word_latency']
 
     for table_name in tables_to_search:
         if not _table_exists(table_name):
@@ -703,6 +800,30 @@ def search():
                         filter_options[key] = set()
                     filter_options[key].add(normalized_val)
 
+            modules_dimensions = _parse_memory_modules(item.get('modules'))
+            if modules_dimensions:
+                module_count_range['min'] = min(module_count_range['min'], modules_dimensions['count'])
+                module_count_range['max'] = max(module_count_range['max'], modules_dimensions['count'])
+                module_size_range['min'] = min(module_size_range['min'], modules_dimensions['size'])
+                module_size_range['max'] = max(module_size_range['max'], modules_dimensions['size'])
+
+            speed_dimensions = _parse_memory_speed(item.get('speed'))
+            if speed_dimensions:
+                speed_ddr_type_range['min'] = min(speed_ddr_type_range['min'], speed_dimensions['ddr_type'])
+                speed_ddr_type_range['max'] = max(speed_ddr_type_range['max'], speed_dimensions['ddr_type'])
+                speed_mhz_range['min'] = min(speed_mhz_range['min'], speed_dimensions['mhz'])
+                speed_mhz_range['max'] = max(speed_mhz_range['max'], speed_dimensions['mhz'])
+
+            cas_latency_value = _parse_memory_latency(item.get('cas_latency'))
+            if cas_latency_value is not None:
+                cas_latency_range['min'] = min(cas_latency_range['min'], cas_latency_value)
+                cas_latency_range['max'] = max(cas_latency_range['max'], cas_latency_value)
+
+            first_word_latency_value = _parse_memory_latency(item.get('first_word_latency'))
+            if first_word_latency_value is not None:
+                first_word_latency_range['min'] = min(first_word_latency_range['min'], first_word_latency_value)
+                first_word_latency_range['max'] = max(first_word_latency_range['max'], first_word_latency_value)
+
             # Build a stable per-category value baseline from all latest rows,
             # independent of active filters.
             item_value_raw = _safe_parse_price(item.get('value'))
@@ -724,6 +845,55 @@ def search():
                 if normalized_item_val not in normalized_selected_vals:
                     item_matches_active_filters = False
                     break
+
+            if item_matches_active_filters and table_name == 'memory' and any(value is not None for value in [min_modules_count, max_modules_count, min_modules_size, max_modules_size, min_speed_ddr_type, max_speed_ddr_type, min_speed_mhz, max_speed_mhz, min_cas_latency, max_cas_latency, min_first_word_latency, max_first_word_latency]):
+                if min_modules_count is not None or max_modules_count is not None or min_modules_size is not None or max_modules_size is not None:
+                    if not modules_dimensions:
+                        item_matches_active_filters = False
+                    else:
+                        module_count = modules_dimensions['count']
+                        module_size = modules_dimensions['size']
+                        if min_modules_count is not None and module_count < min_modules_count:
+                            item_matches_active_filters = False
+                        if max_modules_count is not None and module_count > max_modules_count:
+                            item_matches_active_filters = False
+                        if min_modules_size is not None and module_size < min_modules_size:
+                            item_matches_active_filters = False
+                        if max_modules_size is not None and module_size > max_modules_size:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_speed_ddr_type is not None or max_speed_ddr_type is not None or min_speed_mhz is not None or max_speed_mhz is not None):
+                    if not speed_dimensions:
+                        item_matches_active_filters = False
+                    else:
+                        speed_ddr_type = speed_dimensions['ddr_type']
+                        speed_mhz = speed_dimensions['mhz']
+                        if min_speed_ddr_type is not None and speed_ddr_type < min_speed_ddr_type:
+                            item_matches_active_filters = False
+                        if max_speed_ddr_type is not None and speed_ddr_type > max_speed_ddr_type:
+                            item_matches_active_filters = False
+                        if min_speed_mhz is not None and speed_mhz < min_speed_mhz:
+                            item_matches_active_filters = False
+                        if max_speed_mhz is not None and speed_mhz > max_speed_mhz:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_cas_latency is not None or max_cas_latency is not None):
+                    if cas_latency_value is None:
+                        item_matches_active_filters = False
+                    else:
+                        if min_cas_latency is not None and cas_latency_value < min_cas_latency:
+                            item_matches_active_filters = False
+                        if max_cas_latency is not None and cas_latency_value > max_cas_latency:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_first_word_latency is not None or max_first_word_latency is not None):
+                    if first_word_latency_value is None:
+                        item_matches_active_filters = False
+                    else:
+                        if min_first_word_latency is not None and first_word_latency_value < min_first_word_latency:
+                            item_matches_active_filters = False
+                        if max_first_word_latency is not None and first_word_latency_value > max_first_word_latency:
+                            item_matches_active_filters = False
 
             if not item_matches_active_filters:
                 continue
@@ -769,6 +939,39 @@ def search():
     if value_range['min'] != float('inf'):
         value_range['min'] = 0.0
         value_range['max'] = 5.0
+
+    if module_count_range['min'] != float('inf'):
+        module_count_range['min'] = int(module_count_range['min'])
+        module_count_range['max'] = int(module_count_range['max'])
+    else:
+        module_count_range = {'min': 1, 'max': 8}
+
+    if module_size_range['min'] == float('inf'):
+        module_size_range = {'min': 4, 'max': 64}
+
+    if speed_ddr_type_range['min'] != float('inf'):
+        speed_ddr_type_range['min'] = int(speed_ddr_type_range['min'])
+        speed_ddr_type_range['max'] = int(speed_ddr_type_range['max'])
+    else:
+        speed_ddr_type_range = {'min': 0, 'max': 0}
+
+    if speed_mhz_range['min'] != float('inf'):
+        speed_mhz_range['min'] = int(speed_mhz_range['min'])
+        speed_mhz_range['max'] = int(speed_mhz_range['max'])
+    else:
+        speed_mhz_range = {'min': 0, 'max': 0}
+
+    if cas_latency_range['min'] != float('inf'):
+        cas_latency_range['min'] = round(cas_latency_range['min'], 3)
+        cas_latency_range['max'] = round(cas_latency_range['max'], 3)
+    else:
+        cas_latency_range = {'min': 0, 'max': 0}
+
+    if first_word_latency_range['min'] != float('inf'):
+        first_word_latency_range['min'] = round(first_word_latency_range['min'], 3)
+        first_word_latency_range['max'] = round(first_word_latency_range['max'], 3)
+    else:
+        first_word_latency_range = {'min': 0, 'max': 0}
 
     # Apply numeric range filters after collecting latest rows per item
     if min_price is not None or max_price is not None or min_value is not None or max_value is not None:
@@ -887,6 +1090,30 @@ def search():
         pagination_query_items.append(('min_value', min_value))
     if max_value is not None:
         pagination_query_items.append(('max_value', max_value))
+    if min_modules_count is not None:
+        pagination_query_items.append(('min_modules_count', min_modules_count))
+    if max_modules_count is not None:
+        pagination_query_items.append(('max_modules_count', max_modules_count))
+    if min_modules_size is not None:
+        pagination_query_items.append(('min_modules_size', min_modules_size))
+    if max_modules_size is not None:
+        pagination_query_items.append(('max_modules_size', max_modules_size))
+    if min_speed_ddr_type is not None:
+        pagination_query_items.append(('min_speed_ddr_type', min_speed_ddr_type))
+    if max_speed_ddr_type is not None:
+        pagination_query_items.append(('max_speed_ddr_type', max_speed_ddr_type))
+    if min_speed_mhz is not None:
+        pagination_query_items.append(('min_speed_mhz', min_speed_mhz))
+    if max_speed_mhz is not None:
+        pagination_query_items.append(('max_speed_mhz', max_speed_mhz))
+    if min_cas_latency is not None:
+        pagination_query_items.append(('min_cas_latency', min_cas_latency))
+    if max_cas_latency is not None:
+        pagination_query_items.append(('max_cas_latency', max_cas_latency))
+    if min_first_word_latency is not None:
+        pagination_query_items.append(('min_first_word_latency', min_first_word_latency))
+    if max_first_word_latency is not None:
+        pagination_query_items.append(('max_first_word_latency', max_first_word_latency))
     pagination_query_string = urlencode(pagination_query_items, doseq=True)
     
     if price_range['min'] == float('inf'):
@@ -918,6 +1145,24 @@ def search():
                            max_price=max_price,
                            min_value=min_value,
                            max_value=max_value,
+                           min_modules_count=min_modules_count,
+                           max_modules_count=max_modules_count,
+                           min_modules_size=min_modules_size,
+                           max_modules_size=max_modules_size,
+                           module_count_range=module_count_range,
+                           module_size_range=module_size_range,
+                           min_speed_ddr_type=min_speed_ddr_type,
+                           max_speed_ddr_type=max_speed_ddr_type,
+                           min_speed_mhz=min_speed_mhz,
+                           max_speed_mhz=max_speed_mhz,
+                           min_cas_latency=min_cas_latency,
+                           max_cas_latency=max_cas_latency,
+                           min_first_word_latency=min_first_word_latency,
+                           max_first_word_latency=max_first_word_latency,
+                           speed_ddr_type_range=speed_ddr_type_range,
+                           speed_mhz_range=speed_mhz_range,
+                           cas_latency_range=cas_latency_range,
+                           first_word_latency_range=first_word_latency_range,
                            from_build=from_build)
 
 
@@ -1039,8 +1284,9 @@ def saved_build_detail(build_id):
 def item_history():
     table_type = request.args.get('table_type')
     category = (table_type or '').strip().lower().replace('-', '_')
+    passed_value_normalized = request.args.get('value_normalized')
 
-    ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt']
+    ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt', 'value_normalized']
     filters = {k: v for k, v in request.args.items() if k not in ignored and v != 'None'}
     
     # Build a normalized WHERE clause
@@ -1074,12 +1320,20 @@ def item_history():
         except (ValueError, TypeError):
             prices.append(None)
 
+    latest_value_normalized = None
+    if passed_value_normalized not in (None, '', 'None'):
+        try:
+            latest_value_normalized = float(passed_value_normalized)
+        except (TypeError, ValueError):
+            latest_value_normalized = None
+
     return render_template('item_history.html', 
                            history=rows, 
                            specs=filters,
                            name=product_name,
                            category=category,
                            latest_price=prices[-1] if prices else None,
+                           value_normalized=latest_value_normalized,
                            dates=labels,
                            prices=prices)
 

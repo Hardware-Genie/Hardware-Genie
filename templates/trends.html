@@ -5,15 +5,24 @@
 <div class="main-content" style="margin: 20px;">
 	<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
 		<h2 style="margin: 0;">Price Trends by Category</h2>
-		<button id="trend-view-toggle" type="button" style="padding: 8px 12px; border: 1px solid #38635a; background: #ffffff; color: #38635a; border-radius: 6px; cursor: pointer; font-weight: 600;">
-			Show Average Only
-		</button>
 	</div>
 	<p>Each chart shows min/max price ranges by snapshot date with the average shown as a centered marker bar.</p>
 
 	{% for category in trend_data %}
 		<section style="margin: 24px 0; padding: 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
-			<h3 style="margin-top: 0;">{{ category.label }}</h3>
+			<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+				<h3 style="margin-top: 0;">{{ category.label }}</h3>
+				{% if category.labels and category.prices %}
+					<button
+						type="button"
+						class="trend-view-toggle"
+						data-category-key="{{ category.key }}"
+						style="padding: 8px 12px; border: 1px solid #38635a; background: #ffffff; color: #38635a; border-radius: 6px; cursor: pointer; font-weight: 600;"
+					>
+						Show Average Only
+					</button>
+				{% endif %}
+			</div>
 			{% if category.labels and category.prices %}
 				<canvas id="trendChart-{{ category.key }}" style="max-height: 360px;"></canvas>
 			{% else %}
@@ -28,10 +37,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
 	const trendDataElement = document.getElementById('trend-data');
-	const toggleButton = document.getElementById('trend-view-toggle');
 	const trendData = trendDataElement ? JSON.parse(trendDataElement.textContent || '[]') : [];
-	let showRangeMode = true;
-	const chartEntries = [];
 
 	const buildAverageOnlyDataset = (category) => ([{
 		type: 'line',
@@ -130,6 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 
+		let showRangeMode = true;
+
 		const chart = new Chart(canvas.getContext('2d'), {
 			type: 'bar',
 			data: {
@@ -185,21 +193,18 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		});
 
-		chartEntries.push({ chart, category });
-	});
+		const toggleButton = document.querySelector(`.trend-view-toggle[data-category-key="${category.key}"]`);
+		if (toggleButton) {
+			toggleButton.addEventListener('click', () => {
+				showRangeMode = !showRangeMode;
+				toggleButton.textContent = showRangeMode ? 'Show Average Only' : 'Show Range + Average';
 
-	if (toggleButton) {
-		toggleButton.addEventListener('click', () => {
-			showRangeMode = !showRangeMode;
-			toggleButton.textContent = showRangeMode ? 'Show Average Only' : 'Show Range + Average';
-
-			chartEntries.forEach(({ chart, category }) => {
 				chart.config.type = showRangeMode ? 'bar' : 'line';
 				chart.data.datasets = showRangeMode ? buildRangeDatasets(category) : buildAverageOnlyDataset(category);
 				chart.update();
 			});
-		});
-	}
+		}
+	});
 });
 </script>
 {% endblock %}
