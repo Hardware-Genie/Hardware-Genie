@@ -3,6 +3,16 @@ from wtforms import *
 from wtforms.validators import DataRequired, InputRequired, Email, Optional, EqualTo, Length
 
 
+PART_CATEGORY_CHOICES = [
+    ('cpu', 'CPU'),
+    ('memory', 'Memory'),
+    ('video_card', 'Video Card'),
+    ('motherboard', 'Motherboard'),
+    ('power_supply', 'Power Supply'),
+    ('internal_hard_drive', 'Internal Hard Drive'),
+]
+
+
 class WebsiteToScrape(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     url = StringField('URL', validators=[DataRequired()])
@@ -10,8 +20,8 @@ class WebsiteToScrape(FlaskForm):
 
 
 class PartScraperForm(FlaskForm):
-    name = StringField('Product Name', validators=[DataRequired()])
-    url = StringField('Product URL', validators=[DataRequired()])
+    category = SelectField('Category', choices=PART_CATEGORY_CHOICES, validators=[DataRequired()])
+    url = StringField('Newegg URL', validators=[DataRequired()])
     submit = SubmitField('Run Part Scraper')
 
 

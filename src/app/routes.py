@@ -8,6 +8,7 @@ from app import app
 from app import db
 import os
 import pandas as pd
+import sqlite3
 import json
 import re
 from urllib.parse import urlencode
@@ -93,6 +94,12 @@ class scraper_csv_reader:
 
     def from_csv(self, file_name, sort_by, ascending_bool):
         csv_path = f'static/data/newegg_price_history_files/{file_name}.csv'
+        if not os.path.exists(csv_path):
+            self.name = []
+            self.price = []
+            self.date = []
+            return
+
         df = pd.read_csv(csv_path)
         df = df.dropna(subset=['price'])
         df = df.sort_values(by=sort_by, ascending=ascending_bool)
@@ -103,6 +110,7 @@ class scraper_csv_reader:
     def to_dict(self):
         return {
             'name': self.name,
+            'labels': self.name,
             'price': self.price,
             'date': self.date,
         }
@@ -119,6 +127,15 @@ new_gpu_csv_reader.from_csv('video-card', 'product_name', True)
 
 new_storage_csv_reader = scraper_csv_reader([], [], [])
 new_storage_csv_reader.from_csv('internal-hard-drive', 'product_name', True)
+
+new_motherboard_csv_reader = scraper_csv_reader([], [], [])
+new_motherboard_csv_reader.from_csv('motherboard', 'product_name', True)
+
+new_power_supply_csv_reader = scraper_csv_reader([], [], [])
+new_power_supply_csv_reader.from_csv('power-supply', 'product_name', True)
+
+mb_csv_reader = new_motherboard_csv_reader
+psu_csv_reader = new_power_supply_csv_reader
 
 
 def _normalize_memory_label(value):
@@ -641,9 +658,9 @@ def scraper_parts():
 
     form = PartScraperForm()
     if form.validate_on_submit():
-        name = form.name.data
+        category = form.category.data
         url = form.url.data
-        task = tasks.crawl_spider.delay(name, url)
+        task = tasks.crawl_spider.delay(url, category)
         return redirect(url_for('scraper_status', task_id=task.id, scraper='parts'))
     return render_template('scraper_parts.html', form=form)
 
@@ -688,7 +705,86 @@ def scraper_status(task_id):
         info=result.info,
         back_url=back_url,
         back_label=back_label,
+        scraper=scraper_type,
     )
+
+
+@app.route('/api/latest-scraped-product')
+@login_required
+def latest_scraped_product():
+    """API endpoint to get the most recently scraped product information"""
+    if not _is_admin_user():
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    # Check SQLite databases for the most recent scraped product
+    data_dir = os.path.join(app.root_path, '..', 'static', 'data', 'newegg_price_history_files')
+    category_tables = ['cpu', 'memory', 'video_card', 'motherboard', 'power_supply', 'internal_hard_drive']
+    
+    latest_product = None
+    latest_timestamp = None
+    
+    for table in category_tables:
+        db_path = os.path.join(data_dir, f"{table}_price_history.db")
+        if not os.path.exists(db_path):
+            continue
+            
+        try:
+            # Connect to SQLite database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get the most recent entry from this table
+            cursor.execute("""
+                SELECT product_name, product_url, snapshot_date, timestamp, archive_url, price
+                FROM price_history 
+                ORDER BY timestamp DESC, snapshot_date DESC 
+                LIMIT 1
+            """)
+            
+            result = cursor.fetchone()
+            if result:
+                product_name, product_url, snapshot_date, timestamp, archive_url, price = result
+                
+                # Parse timestamp as integer for comparison
+                try:
+                    current_timestamp = int(timestamp)
+                    if latest_timestamp is None or current_timestamp > latest_timestamp:
+                        latest_timestamp = current_timestamp
+                        
+                        # Build specs object
+                        specs = {
+                            'price': price,
+                            'snapshot_date': snapshot_date,
+                            'product_url': product_url,
+                            'archive_url': archive_url
+                        }
+                        
+                        latest_product = {
+                            'name': product_name,
+                            'category': table,
+                            'specs': specs
+                        }
+                except (ValueError, TypeError):
+                    # Skip if timestamp is invalid
+                    pass
+            
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            app.logger.error(f"Error querying SQLite database {db_path}: {e}")
+            continue
+    
+    if latest_product:
+        return jsonify({
+            'success': True,
+            'product': latest_product
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'No scraped products found'
+        }), 404
 
 
 @app.route('/search')
@@ -1289,21 +1385,62 @@ def item_history():
     ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt', 'value_normalized']
     filters = {k: v for k, v in request.args.items() if k not in ignored and v != 'None'}
     
-    # Build a normalized WHERE clause
-    # This compares: REPLACE('5, 4800', ' ', '') = REPLACE('5,4800', ' ', '')
-    where_parts = []
-    clean_params = {}
+    # Check if this is a scraped category that should use SQLite database
+    scraped_categories = ['cpu', 'memory', 'video_card', 'motherboard', 'power_supply', 'internal_hard_drive']
+    use_sqlite = table_type in scraped_categories
     
-    for k, v in filters.items():
-        # Strip spaces from the search value coming from the URL
-        clean_val = str(v).replace(" ", "").lower()
-        where_parts.append(f"REPLACE(LOWER(CAST({k} AS TEXT)), ' ', '') = :{k}_clean")
-        clean_params[f"{k}_clean"] = clean_val
+    if use_sqlite:
+        # Use SQLite database for scraped data
+        data_dir = os.path.join(app.root_path, '..', 'static', 'data', 'newegg_price_history_files')
+        db_path = os.path.join(data_dir, f"{table_type}_price_history.db")
+        
+        if not os.path.exists(db_path):
+            return "Database not found", 404
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Build WHERE clause for SQLite
+        where_parts = []
+        params = {}
+        
+        for k, v in filters.items():
+            # Strip spaces from the search value coming from the URL
+            clean_val = str(v).replace(" ", "").lower()
+            where_parts.append(f"REPLACE(LOWER({k}), ' ', '') = ?")
+            params[clean_val] = clean_val
+        
+        where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+        
+        # Get columns from the table
+        cursor.execute(f"PRAGMA table_info(price_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        # Build the query
+        sql = f"SELECT * FROM price_history WHERE {where_clause} ORDER BY snapshot_date ASC"
+        
+        cursor.execute(sql, list(params.values()))
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+    else:
+        # Use main database for non-scraped data
+        # Build a normalized WHERE clause
+        # This compares: REPLACE('5, 4800', ' ', '') = REPLACE('5,4800', ' ', '')
+        where_parts = []
+        clean_params = {}
+        
+        for k, v in filters.items():
+            # Strip spaces from the search value coming from the URL
+            clean_val = str(v).replace(" ", "").lower()
+            where_parts.append(f"REPLACE(LOWER(CAST({k} AS TEXT)), ' ', '') = :{k}_clean")
+            clean_params[f"{k}_clean"] = clean_val
 
-    where_clause = " AND ".join(where_parts)
-    sql = text(f"SELECT * FROM {table_type} WHERE {where_clause} ORDER BY snapshot_date ASC")
-    
-    rows = db.session.execute(sql, clean_params).mappings().all()
+        where_clause = " AND ".join(where_parts)
+        sql = text(f"SELECT * FROM {table_type} WHERE {where_clause} ORDER BY snapshot_date ASC")
+        
+        rows = db.session.execute(sql, clean_params).mappings().all()
 
     product_name = filters.get('name')
     if not product_name and rows:

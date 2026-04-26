@@ -18,6 +18,41 @@
         {% elif state == 'SUCCESS' %}
             <p>The job completed successfully!</p>
             <p><strong>Result:</strong> {{ result }}</p>
+            {% if scraper == 'parts' %}
+                <div style="margin-top: 20px;">
+                    <button onclick="goToPriceHistory()" class="auth-submit" style="background-color: #28a745;">
+                        View Price History
+                    </button>
+                </div>
+                <script>
+                    async function goToPriceHistory() {
+                        try {
+                            const response = await fetch('/api/latest-scraped-product');
+                            const data = await response.json();
+                            if (data.success && data.product) {
+                                const params = new URLSearchParams({
+                                    table_type: data.product.category,
+                                    name: data.product.name
+                                });
+                                // Add other specs if available
+                                if (data.product.specs) {
+                                    Object.entries(data.product.specs).forEach(([key, value]) => {
+                                        if (value && value !== 'None') {
+                                            params.set(key, value);
+                                        }
+                                    });
+                                }
+                                window.location.href = `/history?${params.toString()}`;
+                            } else {
+                                alert('Could not find product information. Please navigate manually.');
+                            }
+                        } catch (error) {
+                            console.error('Error fetching product info:', error);
+                            alert('Error loading product information. Please navigate manually.');
+                        }
+                    }
+                </script>
+            {% endif %}
         {% elif state == 'FAILURE' %}
             <p>The job failed.</p>
             <p><strong>Error:</strong> {{ info }}</p>
