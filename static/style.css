@@ -559,6 +559,19 @@ select {
   max-width: 760px;
 }
 
+.scraper-button-label{
+  display: inline-block;
+  padding: 8px 14px;
+  background-color: var(--action-button-bg-color);
+  color: var(--surface-base-color);
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

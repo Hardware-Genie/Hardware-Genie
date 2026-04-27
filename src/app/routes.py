@@ -277,6 +277,8 @@ HISTORY_SIGNATURE_COLUMNS = {
     'internal_hard_drive': ['capacity', 'type', 'interface', 'form_factor', 'cache'],
 }
 
+GROUPING_IGNORED_COLUMNS = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
+
 
 def _fetch_latest_row_for_part(table_type, part_name):
     if not table_type or not part_name:
@@ -371,14 +373,43 @@ def _percentile_rank(sorted_values, value):
     return (rank_index / (total_values - 1)) * 100.0
 
 
+def _category_group_columns(table_name):
+    inst = inspect(db.engine)
+    columns = [c['name'] for c in inst.get_columns(table_name)]
+    ignored = {column.lower() for column in GROUPING_IGNORED_COLUMNS}
+    return [column for column in columns if column.lower() not in ignored]
+
+
+def _sorted_value_baseline_for_table(table_name, group_cols):
+    if not table_name or not group_cols:
+        return []
+
+    group_by_cols = ", ".join(group_cols)
+    baseline_sql = text(f"""
+    SELECT value
+    FROM (
+        SELECT value,
+               ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
+        FROM {table_name}
+    )
+    WHERE rn = 1
+    """)
+
+    baseline_rows = db.session.execute(baseline_sql).mappings().all()
+    baseline_values = []
+    for baseline_row in baseline_rows:
+        baseline_value = _safe_parse_price(baseline_row.get('value'))
+        if baseline_value is not None:
+            baseline_values.append(baseline_value)
+
+    return sorted(baseline_values)
+
+
 def _build_category_items(table_name):
     if not _table_exists(table_name):
         return []
 
-    inst = inspect(db.engine)
-    columns = [c['name'] for c in inst.get_columns(table_name)]
-    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
-    group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
+    group_cols = _category_group_columns(table_name)
 
     if not group_cols:
         return []
@@ -866,7 +897,6 @@ def search():
     value_samples_by_table = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
-    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
     filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count', 'modules', 'speed', 'cas_latency', 'first_word_latency']
 
     for table_name in tables_to_search:
@@ -884,7 +914,7 @@ def search():
             params["q"] = f"%{query}%"
 
         # 2. Define identifying columns and grouping logic
-        group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
+        group_cols = _category_group_columns(table_name)
         
         # 3. Build the final SQL - use ROW_NUMBER window function for better performance
         where_clause = " AND ".join(where_parts) if where_parts else "1=1"
@@ -902,6 +932,12 @@ def search():
         )
         WHERE rn = 1
         """)
+
+        # Build the category-wide value baseline from all latest rows,
+        # independent of search text and active filters.
+        baseline_values = _sorted_value_baseline_for_table(table_name, group_cols)
+        if baseline_values:
+            value_samples_by_table[table_name] = baseline_values
         
         # 4. Execute and Process
         results = db.session.execute(sql, params).mappings().all()
@@ -951,15 +987,10 @@ def search():
                 first_word_latency_range['min'] = min(first_word_latency_range['min'], first_word_latency_value)
                 first_word_latency_range['max'] = max(first_word_latency_range['max'], first_word_latency_value)
 
-            # Build a stable per-category value baseline from all latest rows,
-            # independent of active filters.
+            # Keep raw DB value for scoring against the category-wide baseline.
             item_value_raw = _safe_parse_price(item.get('value'))
             item['value_raw'] = item_value_raw
             item['value_normalized'] = None
-            if item_value_raw is not None:
-                if table_name not in value_samples_by_table:
-                    value_samples_by_table[table_name] = []
-                value_samples_by_table[table_name].append(item_value_raw)
 
             # Apply selected checkbox filters after building options to avoid shrinking menus.
             item_matches_active_filters = True
@@ -1037,7 +1068,7 @@ def search():
 
     # Compute percentile per category and map percentile (0-100) to value score (0-5).
     sorted_value_samples_by_table = {
-        table_name: sorted(values)
+        table_name: values
         for table_name, values in value_samples_by_table.items()
         if values
     }
@@ -1448,7 +1479,16 @@ def item_history():
             prices.append(None)
 
     latest_value_normalized = None
-    if passed_value_normalized not in (None, '', 'None'):
+    if category and _table_exists(category):
+        group_cols = _category_group_columns(category)
+        baseline_values = _sorted_value_baseline_for_table(category, group_cols)
+        latest_row = rows[-1] if rows else None
+        latest_value_raw = _safe_parse_price(latest_row.get('value')) if latest_row else None
+        latest_percentile = _percentile_rank(baseline_values, latest_value_raw)
+        if latest_percentile is not None:
+            latest_value_normalized = round((latest_percentile / 100.0) * 5.0, 3)
+
+    if latest_value_normalized is None and passed_value_normalized not in (None, '', 'None'):
         try:
             latest_value_normalized = float(passed_value_normalized)
         except (TypeError, ValueError):
