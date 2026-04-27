@@ -11,6 +11,7 @@
         <a class="back-button" id="productsBackButton" href="{{ url_for('index') }}">← Back</a>
         <form action="{{ url_for('products') }}" method="GET">
             <input class="search-input" type="text" name="q" value="{{ query }}" placeholder="Search hardware...">
+            <input type="hidden" name="category" value="{{ selected_category or '' }}">
             <button class="search-button" type="submit">Search</button>
         </form>
     </div>

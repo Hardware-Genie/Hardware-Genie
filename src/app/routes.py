@@ -10,7 +10,7 @@ import os
 import pandas as pd
 import json
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm
 from app.models import User, SavedBuild
@@ -93,12 +93,31 @@ class scraper_csv_reader:
 
     def from_csv(self, file_name, sort_by, ascending_bool):
         csv_path = f'static/data/newegg_price_history_files/{file_name}.csv'
-        df = pd.read_csv(csv_path)
+        try:
+            df = pd.read_csv(csv_path)
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError):
+            self.name = []
+            self.price = []
+            self.date = []
+            return
+
+        name_column = 'product_name' if 'product_name' in df.columns else 'name' if 'name' in df.columns else None
+        if name_column is None:
+            self.name = []
+            self.price = []
+            self.date = []
+            return
+
         df = df.dropna(subset=['price'])
+        df = df[df[name_column].fillna('').astype(str).str.strip() != '']
+
+        if sort_by not in df.columns:
+            sort_by = name_column
+
         df = df.sort_values(by=sort_by, ascending=ascending_bool)
-        self.name = df['product_name'].tolist()
+        self.name = df[name_column].fillna('').tolist()
         self.price = df['price'].tolist()
-        self.date = df['snapshot_date'].tolist()
+        self.date = df['snapshot_date'].tolist() if 'snapshot_date' in df.columns else []
 
     def to_dict(self):
         return {
@@ -109,16 +128,22 @@ class scraper_csv_reader:
 
     #dont touch these unless you know what you're doing
 new_cpu_csv_reader = scraper_csv_reader([], [], [])
-new_cpu_csv_reader.from_csv('cpu', 'product_name', True)
+new_cpu_csv_reader.from_csv('cpu', 'name', True)
 
 new_memory_csv_reader = scraper_csv_reader([], [], [])
-new_memory_csv_reader.from_csv('memory', 'product_name', True)
+new_memory_csv_reader.from_csv('memory', 'name', True)
 
 new_gpu_csv_reader = scraper_csv_reader([], [], [])
-new_gpu_csv_reader.from_csv('video-card', 'product_name', True)
+new_gpu_csv_reader.from_csv('video-card', 'name', True)
 
 new_storage_csv_reader = scraper_csv_reader([], [], [])
-new_storage_csv_reader.from_csv('internal-hard-drive', 'product_name', True)
+new_storage_csv_reader.from_csv('internal-hard-drive', 'name', True)
+
+new_motherboard_csv_reader = scraper_csv_reader([], [], [])
+new_motherboard_csv_reader.from_csv('motherboard', 'name', True)
+
+new_psu_csv_reader = scraper_csv_reader([], [], [])
+new_psu_csv_reader.from_csv('power-supply', 'name', True)
 
 
 def _normalize_memory_label(value):
@@ -243,6 +268,28 @@ TREND_CATEGORY_LABELS = {
     'internal_hard_drive': 'Hard Drives',
 }
 
+HISTORY_SIGNATURE_COLUMNS = {
+    'cpu': ['core_count', 'core_clock', 'boost_clock', 'tdp', 'graphics', 'smt'],
+    'memory': ['modules', 'speed', 'cas_latency', 'color'],
+    'video_card': ['chipset', 'memory', 'core_clock', 'boost_clock', 'length'],
+    'motherboard': ['socket', 'form_factor', 'max_memory', 'memory_slots'],
+    'power_supply': ['type', 'efficiency', 'wattage', 'modular'],
+    'internal_hard_drive': ['capacity', 'type', 'interface', 'form_factor', 'cache'],
+}
+
+
+def _fetch_latest_row_for_part(table_type, part_name):
+    if not table_type or not part_name:
+        return None
+    if table_type not in BUILD_TABLE_LABELS:
+        return None
+    if not _table_exists(table_type):
+        return None
+
+    sql = text(f"SELECT * FROM {table_type} WHERE name = :name ORDER BY snapshot_date DESC LIMIT 1")
+    row = db.session.execute(sql, {'name': part_name}).mappings().first()
+    return dict(row) if row else None
+
 
 def _is_admin_user():
     if not getattr(current_user, 'is_authenticated', False):
@@ -256,6 +303,55 @@ def _safe_parse_price(value):
         return float(str(value).replace('$', '').replace(',', '').strip())
     except (TypeError, ValueError):
         return None
+
+
+def _slug_name_from_url(product_url):
+    parsed = urlparse(product_url or '')
+    path_parts = [p for p in parsed.path.split('/') if p]
+    if 'p' in path_parts:
+        p_index = path_parts.index('p')
+        if p_index > 0:
+            slug = path_parts[p_index - 1]
+        elif len(path_parts) >= 2:
+            slug = path_parts[-2]
+        else:
+            slug = path_parts[-1] if path_parts else ''
+    elif len(path_parts) >= 2:
+        slug = path_parts[-2]
+    elif path_parts:
+        slug = path_parts[-1]
+    else:
+        return None
+
+    slug = re.sub(r'-p$', '', slug, flags=re.IGNORECASE)
+    slug = re.sub(r'[-_]+', ' ', slug).strip()
+
+    tokens = [t for t in re.split(r'\s+', slug) if t]
+    if not tokens:
+        return None
+
+    stop_exact = {
+        'desktop', 'laptop', 'notebook', 'memory', 'ram', 'black', 'white',
+        'silver', 'red', 'blue', 'gray', 'grey', 'gold', 'kit', 'module', 'gaming'
+    }
+
+    shortened = []
+    for token in tokens:
+        lower = token.lower()
+        if re.match(r'^ddr\d+$', lower):
+            break
+        if re.match(r'^cl\d+$', lower):
+            break
+        if lower in {'cas', 'latency'}:
+            break
+        if lower in stop_exact and len(shortened) >= 3:
+            break
+        shortened.append(token)
+
+    if not shortened:
+        shortened = tokens[:7]
+
+    return ' '.join(shortened).title()
 
 
 def _table_exists(table_name):
@@ -641,10 +737,10 @@ def scraper_parts():
 
     form = PartScraperForm()
     if form.validate_on_submit():
-        name = form.name.data
+        category = form.category.data
         url = form.url.data
-        task = tasks.crawl_spider.delay(name, url)
-        return redirect(url_for('scraper_status', task_id=task.id, scraper='parts'))
+        task = tasks.crawl_spider.delay(url, category)
+        return redirect(url_for('scraper_status', task_id=task.id, scraper='parts', scraped_category=category, scraped_url=url))
     return render_template('scraper_parts.html', form=form)
 
 
@@ -673,6 +769,35 @@ def scraper_status(task_id):
     from app.tasks import celery
     result = AsyncResult(task_id, app=celery)
     scraper_type = request.args.get('scraper', 'parts')
+    scraped_category = request.args.get('scraped_category')
+    scraped_url = request.args.get('scraped_url')
+    part_history_url = None
+
+    task_payload = result.result if isinstance(result.result, dict) else {}
+    scrape_summary = task_payload.get('summary') if isinstance(task_payload.get('summary'), dict) else None
+    if not scraped_category:
+        scraped_category = task_payload.get('category')
+    if not scraped_url:
+        scraped_url = task_payload.get('product_url')
+
+    if scraper_type == 'parts' and scraped_category and scraped_url:
+        table_type = scraped_category.replace('-', '_')
+        part_name = (
+            (scrape_summary or {}).get('canonical_name')
+            or task_payload.get('name')
+            or _slug_name_from_url(scraped_url)
+        )
+        if part_name:
+            history_params = {'table_type': table_type, 'name': part_name}
+            latest_row = _fetch_latest_row_for_part(table_type, part_name)
+            for column in HISTORY_SIGNATURE_COLUMNS.get(table_type, []):
+                value = latest_row.get(column) if latest_row else None
+                if value in (None, ''):
+                    continue
+                history_params[column] = value
+
+            part_history_url = url_for('item_history', **history_params)
+
     if scraper_type == 'articles':
         back_url = url_for('scraper_articles')
         back_label = 'Back to Article Scraper'
@@ -688,6 +813,8 @@ def scraper_status(task_id):
         info=result.info,
         back_url=back_url,
         back_label=back_label,
+        part_history_url=part_history_url,
+        scrape_summary=scrape_summary,
     )
 
 
@@ -1397,9 +1524,9 @@ def storage_graphs():
 
 @app.route('/motherboard', methods=['GET', 'POST'])
 def motherboard_page():
-    dict=mb_csv_reader.to_dict()
-    labels = dict['labels']
-    price = dict['price']
+    data = new_motherboard_csv_reader.to_dict()
+    labels = data['name']
+    price = data['price']
     return render_template('motherboard_page.html', labels=labels, price=price)
 
 @app.route('/motherboardgraphs', methods=['GET', 'POST'])
@@ -1409,9 +1536,9 @@ def motherboard_graphs():
 
 @app.route('/powersupply', methods=['GET', 'POST'])
 def powersupply_page():
-    dict=psu_csv_reader.to_dict()
-    labels = dict['labels']
-    price = dict['price']
+    data = new_psu_csv_reader.to_dict()
+    labels = data['name']
+    price = data['price']
     return render_template('powersupply_page.html', labels=labels, price=price)
 
 @app.route('/powersupplygraphs', methods=['GET', 'POST'])

@@ -554,6 +554,94 @@ select {
 .scraper-form .auth-submit {
   margin-top: 6px;
   align-self: flex-start;
+
+.scraper-status-card {
+  max-width: 760px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 14px;
+  background: #edf2f7;
+  color: #334155;
+}
+
+.status-pill--success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-pill--failure {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill--pending,
+.status-pill--progress,
+.status-pill--started {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.status-message {
+  margin: 0 0 12px;
+  color: var(--secondary-content-text-color);
+}
+
+.status-message--success {
+  color: var(--success-text-color);
+}
+
+.status-message--error {
+  color: var(--error-text-color);
+}
+
+.status-meta {
+  margin: 8px 0 0;
+  color: var(--meta-text-color);
+  word-break: break-word;
+}
+
+.scrape-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+
+.scrape-summary-item {
+  border: 1px solid var(--category-card-inner-border-color);
+  background: var(--category-card-inner-bg-color);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.scrape-summary-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--meta-text-color);
+  margin-bottom: 5px;
+}
+
+.scrape-summary-value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary-content-text-color);
+}
+
+.status-primary-action {
+  margin-top: 14px;
+  text-decoration: none;
+  width: fit-content;
+}
 }
 
 /* New Decorative Elements */

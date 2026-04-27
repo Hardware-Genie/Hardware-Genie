@@ -10,7 +10,18 @@ class WebsiteToScrape(FlaskForm):
 
 
 class PartScraperForm(FlaskForm):
-    name = StringField('Product Name', validators=[DataRequired()])
+    category = SelectField(
+        'Category',
+        validators=[DataRequired()],
+        choices=[
+            ('video-card', 'Video Card'),
+            ('cpu', 'CPU'),
+            ('memory', 'Memory'),
+            ('motherboard', 'Motherboard'),
+            ('power-supply', 'Power Supply'),
+            ('internal-hard-drive', 'Internal Hard Drive'),
+        ],
+    )
     url = StringField('Product URL', validators=[DataRequired()])
     submit = SubmitField('Run Part Scraper')
 

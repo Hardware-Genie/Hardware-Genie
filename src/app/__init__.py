@@ -13,6 +13,17 @@ def _resolve_database_uri():
     db_uri = os.getenv('DATABASE_URL', 'sqlite:///parts.db').strip()
     if db_uri.startswith('postgres://'):
         db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
+
+    if db_uri.startswith('sqlite:///'):
+        sqlite_path = db_uri[len('sqlite:///'):]
+        if sqlite_path and sqlite_path != ':memory:' and not os.path.isabs(sqlite_path):
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            if sqlite_path in ('parts.db', './parts.db'):
+                sqlite_path = os.path.join(project_root, 'instance', 'parts.db')
+            else:
+                sqlite_path = os.path.join(project_root, sqlite_path)
+            db_uri = f"sqlite:///{os.path.abspath(sqlite_path).replace('\\', '/')}"
+
     return db_uri
 
 
