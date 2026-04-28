@@ -6,7 +6,6 @@
 import pandas as pd
 import re
 
-# Load the CSV and drop any nonexistent values
 df = pd.read_csv("combined_cpu.csv")
 
 def get_boost_status(eff):
@@ -38,7 +37,7 @@ def analyze_cpu_groups(groups):
     results = {}
 
     for tier, df in groups.items():
-        df = df.copy()  # avoid modifying original
+        df = df.copy()
 
         df["price_float"] = df["price"].astype(float)
         df["core_float"] = df["core_count"].astype(float)
