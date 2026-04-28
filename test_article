@@ -1,30 +1,9 @@
-More RAM misery? The bad news keeps coming as analyst firm warns of an 'unprecedented and record-breaking surge' with price hikes
-News
-By Darren Allan published February 6, 2026
+#Example Headlines
+https://wccftech.com/latest-gpu-market-data-shows-stabilized-prices-in-different-regions/
+Australia Buyers Pay Just 9.5% More For GPUs While US Shoppers Get Hit With 22% RAMpocalypse Premium
 
-Meanwhile, a PC maker fires off another worrying warning
-If you were keeping your fingers crossed for some more optimistic news about the RAM crisis – because we've had glimmers of that, lately – then those hopes will be dashed, I'm afraid, by the latest developments which are distinctly negative.
+https://wccftech.com/samsung-and-kingston-hike-ssd-prices-by-10-again-pushing-1tb-drives-past-330-as-nand-shortage-deepens/
+Samsung and Kingston Hike SSD Prices By 10% Again, Pushing 1TB Drives Past $330 As NAND Shortage Deepens
 
-The main point of interest here is that we have a new report from Counterpoint Research which observes that memory prices have nearly doubled in Q1 2026 so far, compared to the same period in the final quarter of 2025.
-
-The firm informs us: "Memory prices have risen by 80%-90% QoQ in Q1 2026 so far, according to the February issue of Counterpoint's Memory Price Tracker, marking an unprecedented and record-breaking surge."
-
-That's not comforting language, of course, and while we're told that the primary force behind these huge price hikes is the increase in the cost of server RAM, memory modules for PCs have experienced a very similar rise.
-
-Counterpoint singles out DDR4 RAM for laptops (SoDIMMs), of which one 8GB stick witnessed a price rise of 35% in Q4 2025 (quarter-on-quarter), with a currently estimated leap to a 91% increase for Q1 2026 compared to the previous quarter.
-
-Server RAM will end up at 98% more in this quarter, and even NAND modules for storage are going to see a major leap in Q1 2026 – a predicted 100% quarter-on-quarter increase in fact. Nasty.
-
-Counterpoint is essentially telling us that all kinds of memory is going to be hiked in price in a big way this quarter, from PC RAM to server RAM, to HBM (High Bandwidth Memory, top-end modules for AI use), and indeed through to NAND for SSDs. As the analyst firm puts it in a nutshell: "the market is witnessing a full-throttle upward trend across all segments."
-
-Meanwhile, we're hearing much the same story from other analyst outfits – like TrendForce, which is predicting that DRAM pricing is going to rise by 50%, or possibly a bit more, in Q1 of 2026.
-
-Nearer to ground level in this components crisis, PC makers are also warning of hard times ahead for RAM costs, and the latest in that respect is PowerGPU, a custom gaming PC builder in the US.
-
-Tom's Hardware noticed that PowerGPU posted on X to say that "we just got word that SSD and other part prices have gone up again" and to "expect price increases by early next week" on the firm's PCs. Presumably those 'other parts' are RAM, of course, and possibly GPUs too which are facing their own issues due to the scarcity of video memory.
-
-It all sounds rather ominous, and PowerGPU's statement adds to the heap of such warnings from various PC makers we've received late last year and during these early stages of 2026.
-
-While there have been some more positive glimmers around the RAM crisis recently, as noted at the outset – like a snapshot of DDR5 pricing levelling off – the overall sentiment is very much negative, with forecasts of not just more price increases, but huge ones. Whether that's 50% or 100% spikes during this current quarter – take your pick from the pessimistic predictions – it seems like we're in for a lot more pain, whether buying standalone RAM or PCs (or indeed graphics cards).
-
-It's likely that PC makers are going to try to find ways to at least partially mitigate this RAM price misery, which could mean relying on lesser memory configurations with laptops – turning the clock back to use more 8GB loadouts – or indeed creative fudges such as Maingear's BYOR or 'Bring Your Own RAM' concept.
+https://wccftech.com/everyone-thought-google-turboquant-would-solve-the-memory-crisis-but-makes-it-worse/
+Everyone Thought Google’s TurboQuant Would Solve The Memory Crisis, But SK Hynix Says It Will Only Make It Worse
