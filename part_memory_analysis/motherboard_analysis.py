@@ -26,7 +26,6 @@ def analyze_motherboard_groups(groups):
 
         df["quality"] = df["max_memory_float"]
 
-        # Value metric
         df["value"] = df["quality"] / df["price_float"]
 
         mean_value = df["value"].mean()
