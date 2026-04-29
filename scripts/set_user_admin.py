@@ -4,8 +4,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-# python scripts/set_user_admin.py colin@gmail.com
-# python scripts/set_user_admin.py colin@gmail.com --clear
+# python scripts/set_user_admin.py <email> 
+# python scripts/set_user_admin.py <email> --clear
 
 def _add_src_to_path() -> None:
     repo_root = Path(__file__).resolve().parents[1]

@@ -1,4 +1,5 @@
 
+from functools import lru_cache
 from logging import exception
 from bisect import bisect_right
 
@@ -13,7 +14,7 @@ import re
 from urllib.parse import urlencode, urlparse
 
 from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm
-from app.models import User, SavedBuild
+from app.models import User, SavedBuild, ArticleSentiment
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
 from app import tasks
@@ -270,7 +271,7 @@ TREND_CATEGORY_LABELS = {
 
 HISTORY_SIGNATURE_COLUMNS = {
     'cpu': ['core_count', 'core_clock', 'boost_clock', 'tdp', 'graphics', 'smt'],
-    'memory': ['modules', 'speed', 'cas_latency', 'color'],
+    'memory': ['modules', 'speed', 'cas_latency', 'first_word_latency', 'color'],
     'video_card': ['chipset', 'memory', 'core_clock', 'boost_clock', 'length'],
     'motherboard': ['socket', 'form_factor', 'max_memory', 'memory_slots'],
     'power_supply': ['type', 'efficiency', 'wattage', 'modular'],
@@ -300,11 +301,35 @@ def _is_admin_user():
     return bool(getattr(current_user, 'is_admin', False))
 
 
+def _hash_password(password):
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return hashed_password.decode('utf-8')
+
+
+def _ensure_bcrypt_bytes(value):
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode('utf-8')
+    return str(value).encode('utf-8')
+
+
 def _safe_parse_price(value):
     try:
         return float(str(value).replace('$', '').replace(',', '').strip())
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_history_filter_value(value):
+    text = str(value or '').strip().lower().replace(' ', '').replace(',', '')
+    if not text:
+        return text
+
+    if '.' in text:
+        text = text.rstrip('0').rstrip('.')
+
+    return text
 
 
 def _slug_name_from_url(product_url):
@@ -356,8 +381,14 @@ def _slug_name_from_url(product_url):
     return ' '.join(shortened).title()
 
 
+@lru_cache(maxsize=1)
+def _known_tables():
+    with db.engine.connect() as connection:
+        return frozenset(inspect(connection).get_table_names())
+
+
 def _table_exists(table_name):
-    return inspect(db.engine).has_table(table_name)
+    return table_name in _known_tables()
 
 
 def _percentile_rank(sorted_values, value):
@@ -373,9 +404,15 @@ def _percentile_rank(sorted_values, value):
     return (rank_index / (total_values - 1)) * 100.0
 
 
+@lru_cache(maxsize=None)
+def _table_columns(table_name):
+    with db.engine.connect() as connection:
+        inst = inspect(connection)
+        return [c['name'] for c in inst.get_columns(table_name)]
+
+
 def _category_group_columns(table_name):
-    inst = inspect(db.engine)
-    columns = [c['name'] for c in inst.get_columns(table_name)]
+    columns = _table_columns(table_name)
     ignored = {column.lower() for column in GROUPING_IGNORED_COLUMNS}
     return [column for column in columns if column.lower() not in ignored]
 
@@ -386,9 +423,9 @@ def _sorted_value_baseline_for_table(table_name, group_cols):
 
     group_by_cols = ", ".join(group_cols)
     baseline_sql = text(f"""
-    SELECT value
+    SELECT price
     FROM (
-        SELECT value,
+        SELECT price,
                ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
         FROM {table_name}
     )
@@ -398,7 +435,7 @@ def _sorted_value_baseline_for_table(table_name, group_cols):
     baseline_rows = db.session.execute(baseline_sql).mappings().all()
     baseline_values = []
     for baseline_row in baseline_rows:
-        baseline_value = _safe_parse_price(baseline_row.get('value'))
+        baseline_value = _safe_parse_price(baseline_row.get('price'))
         if baseline_value is not None:
             baseline_values.append(baseline_value)
 
@@ -511,6 +548,27 @@ def _build_trend_series(table_name):
     }
 
 
+def _build_article_sentiment_items(category):
+    rows = (
+        ArticleSentiment.query
+        .filter_by(category=category)
+        .order_by(ArticleSentiment.created_at.desc(), ArticleSentiment.id.desc())
+        .limit(5)
+        .all()
+    )
+
+    items = []
+    for row in rows:
+        items.append({
+            'heading': row.heading,
+            'sentiment': row.sentiment,
+            'score': round(float(row.score or 0.0), 4),
+            'created_at': row.created_at.strftime('%Y-%m-%d %H:%M') if row.created_at else '',
+        })
+
+    return items
+
+
 
 # #used to add the old data into a database
 # csv_files = [
@@ -560,7 +618,7 @@ def signup():
             return render_template('signup.html', form=form, same_email=0, miss_match=0, form_errors=form.errors)
 
         if password == form.confirm_password.data:
-            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            hashed = _hash_password(password)
             newUser = User(email=email,username=form.username.data, password_hash=hashed)
             db.session.add(newUser)
             # don't commit if there is another user with the same id, or any other error that occurs with the commit
@@ -594,7 +652,7 @@ def login():
         #    
         #Authenticate user
         try:
-            if bcrypt.checkpw((form.password.data).encode('utf-8'), user.password_hash):
+            if user and bcrypt.checkpw((form.password.data or '').encode('utf-8'), _ensure_bcrypt_bytes(user.password_hash)):
                 login_user(user)
                 print("User logged in successfully")
                 return redirect(url_for('index'))
@@ -654,7 +712,7 @@ def reset_password():
         elif new_password != (form.confirm_new_password.data or ''):
             form.confirm_new_password.errors.append('Passwords must match.')
         else:
-            user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            user.password_hash = _hash_password(new_password)
             db.session.commit()
             password_reset = True
             form.email.data = ''
@@ -717,7 +775,7 @@ def profile():
 
             new_password = form.new_password.data or ''
             if new_password.strip():
-                current_user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+                current_user.password_hash = _hash_password(new_password)
 
             db.session.commit()
             return redirect(url_for('profile', updated=1))
@@ -760,6 +818,25 @@ def scrapers():
     return render_template('scrapers.html')
 
 
+def _invoke_scraper_lambda(url, category):
+    """Invoke the wayback scraper Lambda asynchronously and return the invocation ID."""
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("boto3 is required to invoke the scraper Lambda.") from exc
+
+    lambda_name = os.environ.get('SCRAPER_LAMBDA_NAME', 'hardware-genie-wayback-scraper')
+    client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION', 'us-west-1'))
+    response = client.invoke(
+        FunctionName=lambda_name,
+        InvocationType='Event',
+        Payload=json.dumps({
+            'products': [{'url': url, 'category': category}]
+        }).encode(),
+    )
+    return response.get('ResponseMetadata', {}).get('RequestId', 'unknown')
+
+
 @app.route('/scrapers/parts', methods=['GET', 'POST'])
 @login_required
 def scraper_parts():
@@ -770,9 +847,48 @@ def scraper_parts():
     if form.validate_on_submit():
         category = form.category.data
         url = form.url.data
+        use_lambda = os.environ.get('SCRAPER_LAMBDA_NAME')
+        if use_lambda:
+            invocation_id = _invoke_scraper_lambda(url, category)
+            return redirect(url_for('scraper_status_lambda', invocation_id=invocation_id, scraped_category=category, scraped_url=url))
         task = tasks.crawl_spider.delay(url, category)
         return redirect(url_for('scraper_status', task_id=task.id, scraper='parts', scraped_category=category, scraped_url=url))
     return render_template('scraper_parts.html', form=form)
+
+
+@app.route('/scraper/status/lambda/<invocation_id>')
+@login_required
+def scraper_status_lambda(invocation_id):
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    scraped_category = request.args.get('scraped_category')
+    scraped_url = request.args.get('scraped_url')
+    part_name = _slug_name_from_url(scraped_url) if scraped_url else None
+    part_history_url = None
+
+    if scraped_category and scraped_url and part_name:
+        table_type = scraped_category.replace('-', '_')
+        history_params = {'table_type': table_type, 'name': part_name}
+        latest_row = _fetch_latest_row_for_part(table_type, part_name)
+        for column in HISTORY_SIGNATURE_COLUMNS.get(table_type, []):
+            value = latest_row.get(column) if latest_row else None
+            if value in (None, ''):
+                continue
+            history_params[column] = value
+        part_history_url = url_for('item_history', **history_params)
+
+    return render_template(
+        'scraper_status.html',
+        task_id=invocation_id,
+        state='LAMBDA_INVOKED',
+        result={'status': 'invoked', 'message': 'Lambda invoked asynchronously. Results will appear in the database shortly.'},
+        info=None,
+        back_url=url_for('scraper_parts'),
+        back_label='Back to Part Scraper',
+        part_history_url=part_history_url,
+        scrape_summary=None,
+    )
 
 
 @app.route('/scrapers/articles', methods=['GET', 'POST'])
@@ -783,10 +899,9 @@ def scraper_articles():
 
     form = ArticleScraperForm()
     if form.validate_on_submit():
-        source = (form.source.data or '').strip() or None
-        keywords = (form.keywords.data or '').strip() or None
-        max_articles = form.max_articles.data
-        task = tasks.crawl_tech_news.delay(source=source, keywords=keywords, max_articles=max_articles)
+        heading = (form.heading.data or '').strip()
+        category = (form.category.data or '').strip()
+        task = tasks.analyze_article_heading.delay(heading=heading, category=category)
         return redirect(url_for('scraper_status', task_id=task.id, scraper='articles'))
     return render_template('scraper_articles.html', form=form)
 
@@ -831,7 +946,7 @@ def scraper_status(task_id):
 
     if scraper_type == 'articles':
         back_url = url_for('scraper_articles')
-        back_label = 'Back to Article Scraper'
+        back_label = 'Back to Article Analyzer'
     else:
         back_url = url_for('scraper_parts')
         back_label = 'Back to Part Scraper'
@@ -900,11 +1015,10 @@ def search():
     filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count', 'modules', 'speed', 'cas_latency', 'first_word_latency']
 
     for table_name in tables_to_search:
-        if not _table_exists(table_name):
+        if table_name not in tables:
             continue
 
-        inst = inspect(db.engine)
-        columns = [c['name'] for c in inst.get_columns(table_name)]
+        columns = _table_columns(table_name)
         
         where_parts = []
         params = {}
@@ -1342,6 +1456,7 @@ def trends():
             'min_prices': trend_series['min_prices'],
             'max_prices': trend_series['max_prices'],
             'sample_counts': trend_series['sample_counts'],
+            'article_sentiments': _build_article_sentiment_items(table_name),
         })
 
     return render_template('trends.html', trend_data=trend_data)
@@ -1453,12 +1568,15 @@ def item_history():
     clean_params = {}
     
     for k, v in filters.items():
-        # Strip spaces from the search value coming from the URL
-        clean_val = str(v).replace(" ", "").lower()
-        where_parts.append(f"REPLACE(LOWER(CAST({k} AS TEXT)), ' ', '') = :{k}_clean")
+        # Normalize both sides so Postgres text, floats, and comma-formatted values compare consistently.
+        clean_val = _normalize_history_filter_value(v)
+        where_parts.append(
+            f"REPLACE(REPLACE(LOWER(CASE WHEN CAST({k} AS TEXT) LIKE '%.%' "
+            f"THEN RTRIM(RTRIM(CAST({k} AS TEXT), '0'), '.') ELSE CAST({k} AS TEXT) END), ',', ''), ' ', '') = :{k}_clean"
+        )
         clean_params[f"{k}_clean"] = clean_val
 
-    where_clause = " AND ".join(where_parts)
+    where_clause = " AND ".join(where_parts) if where_parts else "1=1"
     sql = text(f"SELECT * FROM {table_type} WHERE {where_clause} ORDER BY snapshot_date ASC")
     
     rows = db.session.execute(sql, clean_params).mappings().all()
@@ -1483,7 +1601,7 @@ def item_history():
         group_cols = _category_group_columns(category)
         baseline_values = _sorted_value_baseline_for_table(category, group_cols)
         latest_row = rows[-1] if rows else None
-        latest_value_raw = _safe_parse_price(latest_row.get('value')) if latest_row else None
+        latest_value_raw = _safe_parse_price(latest_row.get('price')) if latest_row else None
         latest_percentile = _percentile_rank(baseline_values, latest_value_raw)
         if latest_percentile is not None:
             latest_value_normalized = round((latest_percentile / 100.0) * 5.0, 3)

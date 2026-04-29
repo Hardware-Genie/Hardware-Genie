@@ -28,6 +28,24 @@
 			{% else %}
 				<p>No trend data available for this category yet.</p>
 			{% endif %}
+			<div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e6e6e6;">
+				<h4 style="margin: 0 0 8px;">Saved article headings</h4>
+				{% if category.article_sentiments %}
+					<ul style="margin: 0; padding-left: 18px;">
+						{% for item in category.article_sentiments %}
+							<li style="margin-bottom: 6px;">
+								<strong>{{ item.heading }}</strong>
+								<span> - {{ item.sentiment|title }}{% if item.score is not none %} ({{ '%.2f'|format(item.score) }}){% endif %}</span>
+								{% if item.created_at %}
+									<span style="color: #666;"> - {{ item.created_at }}</span>
+								{% endif %}
+							</li>
+						{% endfor %}
+					</ul>
+				{% else %}
+					<p style="margin: 0; color: #666;">No article sentiments saved for this category yet.</p>
+				{% endif %}
+			</div>
 		</section>
 	{% endfor %}
 </div>

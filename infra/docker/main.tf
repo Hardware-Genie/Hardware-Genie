@@ -95,11 +95,12 @@ resource "null_resource" "build_and_push_image" {
       docker build --provenance=false -f Dockerfile -t ${local.image_uri} .
       if ($LASTEXITCODE -ne 0) { throw 'Docker build failed.' }
       $pushSucceeded = $false
-      $maxAttempts = 5
+      $maxAttempts = 7
       for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         cmd /c "aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${local.ecr_registry}"
         if ($LASTEXITCODE -ne 0) {
           Write-Host "docker login attempt $attempt failed."
+          Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 10))
           continue
         }
         docker push ${local.image_uri}
@@ -108,6 +109,7 @@ resource "null_resource" "build_and_push_image" {
           break
         }
         Write-Host "docker push attempt $attempt failed."
+        Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 10))
       }
       if (-not $pushSucceeded) { throw 'Docker push failed after multiple attempts.' }
     EOT

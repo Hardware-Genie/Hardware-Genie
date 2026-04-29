@@ -4,7 +4,7 @@
 <section class="scraper-page">
     <div class="scraper-card scraper-status-card">
         <a class="back-button" href="{{ back_url if back_url else url_for('scrapers') }}">{{ back_label if back_label else 'Back to Scrapers' }}</a>
-        <h2 class="scraper-title">Scraper Job Status</h2>
+        <h2 class="scraper-title">Job Status</h2>
         <p class="scraper-subtitle">Task ID: {{ task_id }}</p>
 
         <div class="status-pill status-pill--{{ state|lower }}">{{ state }}</div>

@@ -129,3 +129,15 @@ variable "seed_sqlite_to_rds" {
   type        = bool
   default     = false
 }
+
+variable "scraper_lambda_name" {
+  description = "Name of the wayback scraper Lambda function to invoke from the app."
+  type        = string
+  default     = "hardware-genie-wayback-scraper"
+}
+
+variable "scraper_lambda_arn" {
+  description = "ARN of the wayback scraper Lambda (used to grant ECS invoke permission)."
+  type        = string
+  default     = null
+}

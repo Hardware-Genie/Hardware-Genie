@@ -6,6 +6,7 @@
 .vent/
 venv/
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -20,6 +21,12 @@ infra/**/terraform.tfstate.*
 # Local app/runtime artifacts
 *.db
 !instance/parts.db
+
+# Build/editor noise
+.mypy_cache/
+.ruff_cache/
+*.log
+node_modules/
 
 # Data and analysis folders not required in runtime image
 part_memory_analysis/

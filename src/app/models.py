@@ -45,3 +45,17 @@ class SavedBuild(db.Model):
 
     def __str__(self):
         return f'<SavedBuild(id={self.id}, user_id={self.user_id}, build_name={self.build_name})>'
+
+
+class ArticleSentiment(db.Model):
+    "Class that stores article heading sentiment by category"
+    __tablename__ = 'article_sentiments'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    heading = db.Column(db.String, nullable=False)
+    category = db.Column(db.String, nullable=False, index=True)
+    sentiment = db.Column(db.String, nullable=False)
+    score = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __str__(self):
+        return f'<ArticleSentiment(id={self.id}, category={self.category}, sentiment={self.sentiment})>'

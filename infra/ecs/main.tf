@@ -168,6 +168,21 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "invoke_scraper_lambda" {
+  count = var.scraper_lambda_arn != null ? 1 : 0
+  name  = "${var.app_name}-invoke-scraper-lambda"
+  role  = aws_iam_role.ecs_task_execution.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = var.scraper_lambda_arn
+    }]
+  })
+}
+
 resource "aws_ecs_task_definition" "app" {
   family                   = var.app_name
   network_mode             = "awsvpc"
@@ -205,6 +220,14 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "SECRET_KEY",
           value = var.secret_key
+        },
+        {
+          name  = "SCRAPER_LAMBDA_NAME",
+          value = var.scraper_lambda_name
+        },
+        {
+          name  = "AWS_REGION",
+          value = data.aws_region.current.name
         }
       ],
       logConfiguration = {

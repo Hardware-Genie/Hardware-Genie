@@ -1,0 +1,21 @@
+Bastion:
+ssh -i ".\infra\rds\hardware-genie-bastion.pem" ec2-user@18.145.210.158
+
+Try this on the bastion:
+cat /etc/os-release
+sudo yum install -y postgresql15
+
+If yum says the package isn’t available, use:
+sudo dnf install -y postgresql15
+
+Then connect and flip the flag:
+psql "host=hardware-genie-postgres.c384e28igf92.us-west-1.rds.amazonaws.com port=5432 dbname=hardware_genie user=postgres password=greatpassword sslmode=require"
+
+Inside psql:
+UPDATE users
+SET is_admin = TRUE
+WHERE email = 'colin@gmail.com';
+
+SELECT id, username, email, is_admin
+FROM users
+WHERE email = 'colin@gmail.com';

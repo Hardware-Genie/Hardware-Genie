@@ -7,7 +7,8 @@ import tempfile
 import uuid
 from urllib.parse import urlparse
 from .celery_app import make_celery
-from app import app
+from app import app, db
+from app.models import ArticleSentiment
 
 celery = make_celery(app)
 
@@ -85,7 +86,8 @@ def _normalized_task_db_uri(project_root):
                 sqlite_path = os.path.join(project_root, 'instance', 'parts.db')
             else:
                 sqlite_path = os.path.join(project_root, sqlite_path)
-            db_uri = f"sqlite:///{os.path.abspath(sqlite_path).replace('\\', '/')}"
+            normalized_sqlite_path = os.path.abspath(sqlite_path).replace('\\', '/')
+            db_uri = f"sqlite:///{normalized_sqlite_path}"
 
     return db_uri
 
@@ -266,3 +268,55 @@ def crawl_tech_news(self, source=None, keywords=None, max_articles=None):
         return "Tech news crawl timed out."
     except Exception as e:
         return f"Tech news crawl failed: {str(e)}"
+
+
+@celery.task(bind=True)
+def analyze_article_heading(self, heading, category):
+    """Analyze a user-supplied article heading and persist the sentiment."""
+    normalized_heading = str(heading or '').strip()
+    normalized_category = str(category or '').strip()
+
+    if not normalized_heading or not normalized_category:
+        return {
+            'status': 'failed',
+            'message': 'Heading and category are required.',
+        }
+
+    try:
+        from app.sentiment_sampling import sentemantic_analysis
+
+        analysis = sentemantic_analysis(normalized_heading)
+        sentiment = analysis.get('label', 'unsure')
+        score = float(analysis.get('score') or 0.0)
+
+        with app.app_context():
+            record = ArticleSentiment(
+                heading=normalized_heading,
+                category=normalized_category,
+                sentiment=sentiment,
+                score=score,
+            )
+            db.session.add(record)
+            db.session.commit()
+
+        return {
+            'status': 'success',
+            'message': 'Article heading analyzed and saved.',
+            'heading': normalized_heading,
+            'category': normalized_category,
+            'sentiment': sentiment,
+            'score': score,
+        }
+    except Exception as exc:
+        with app.app_context():
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+        return {
+            'status': 'failed',
+            'message': f'Article heading analysis failed: {str(exc)}',
+            'heading': normalized_heading,
+            'category': normalized_category,
+        }

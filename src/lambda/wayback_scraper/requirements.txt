@@ -1,0 +1,5 @@
+Scrapy==2.14.1
+SQLAlchemy==2.0.46
+psycopg2-binary==2.9.10
+lxml==5.4.0
+cssselect==1.4.0

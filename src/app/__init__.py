@@ -22,7 +22,8 @@ def _resolve_database_uri():
                 sqlite_path = os.path.join(project_root, 'instance', 'parts.db')
             else:
                 sqlite_path = os.path.join(project_root, sqlite_path)
-            db_uri = f"sqlite:///{os.path.abspath(sqlite_path).replace('\\', '/')}"
+            normalized_sqlite_path = os.path.abspath(sqlite_path).replace('\\', '/')
+            db_uri = f"sqlite:///{normalized_sqlite_path}"
 
     return db_uri
 
