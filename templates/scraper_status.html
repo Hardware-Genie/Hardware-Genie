@@ -1,38 +1,61 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scraper Job Status</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <h1>Scraper Job Status</h1>
-        <p><strong>Task ID:</strong> {{ task_id }}</p>
-        <p><strong>State:</strong> {{ state }}</p>
+{% extends "base.html" %}
+{% block main %}
+{% include "partials/header.html" %}
+<section class="scraper-page">
+    <div class="scraper-card scraper-status-card">
+        <a class="back-button" href="{{ back_url if back_url else url_for('scrapers') }}">{{ back_label if back_label else 'Back to Scrapers' }}</a>
+        <h2 class="scraper-title">Job Status</h2>
+        <p class="scraper-subtitle">Task ID: {{ task_id }}</p>
+
+        <div class="status-pill status-pill--{{ state|lower }}">{{ state }}</div>
+
         {% if state == 'PENDING' %}
-            <p>The job is pending execution.</p>
+            <p class="status-message">The job is pending execution.</p>
         {% elif state == 'PROGRESS' %}
-            <p>The job is in progress...</p>
+            <p class="status-message">The job is in progress...</p>
         {% elif state == 'SUCCESS' %}
-            <p>The job completed successfully!</p>
-            <p><strong>Result:</strong> {{ result }}</p>
+            <p class="status-message status-message--success">The job completed successfully.</p>
+
+            {% if scrape_summary %}
+                <div class="scrape-summary-grid">
+                    <div class="scrape-summary-item">
+                        <span class="scrape-summary-label">Inserted</span>
+                        <span class="scrape-summary-value">{{ scrape_summary.inserted }}</span>
+                    </div>
+                    <div class="scrape-summary-item">
+                        <span class="scrape-summary-label">Skipped</span>
+                        <span class="scrape-summary-value">{{ scrape_summary.skipped_total }}</span>
+                    </div>
+                    <div class="scrape-summary-item">
+                        <span class="scrape-summary-label">Skipped Existing</span>
+                        <span class="scrape-summary-value">{{ scrape_summary.skipped_existing }}</span>
+                    </div>
+                    <div class="scrape-summary-item">
+                        <span class="scrape-summary-label">Skipped Invalid</span>
+                        <span class="scrape-summary-value">{{ scrape_summary.skipped_invalid }}</span>
+                    </div>
+                </div>
+            {% endif %}
+
+            <p class="status-meta">{{ result.message if result and result.message else result }}</p>
+
+            {% if part_history_url %}
+                <a class="auth-submit status-primary-action" href="{{ part_history_url }}">View scraped part</a>
+            {% endif %}
         {% elif state == 'FAILURE' %}
-            <p>The job failed.</p>
-            <p><strong>Error:</strong> {{ info }}</p>
+            <p class="status-message status-message--error">The job failed.</p>
+            <p class="status-meta">{{ info if info else result }}</p>
         {% else %}
-            <p>Unknown state: {{ state }}</p>
+            <p class="status-message">Unknown state: {{ state }}</p>
         {% endif %}
-        <p><a href="{{ back_url if back_url else url_for('scrapers') }}">{{ back_label if back_label else 'Back to Scrapers' }}</a></p>
-        <script>
-            // Auto-refresh every 5 seconds if not completed
-            if ('{{ state }}' !== 'SUCCESS' && '{{ state }}' !== 'FAILURE') {
-                setTimeout(function() {
-                    location.reload();
-                }, 5000);
-            }
-        </script>
     </div>
-</body>
-</html>
+</section>
+
+<script>
+    if ('{{ state }}' !== 'SUCCESS' && '{{ state }}' !== 'FAILURE') {
+        setTimeout(function() {
+            location.reload();
+        }, 5000);
+    }
+</script>
+{% endblock %}

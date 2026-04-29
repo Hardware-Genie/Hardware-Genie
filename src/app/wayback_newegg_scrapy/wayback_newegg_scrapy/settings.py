@@ -32,11 +32,10 @@ USER_AGENT = (
 )
 
 # ---- Pipelines ----
-# Order matters: SQLite → CSV → Alerts (alerts run last, after data is saved)
+# Order matters: DB writes happen before optional alerts.
 ITEM_PIPELINES = {
-    "wayback_newegg_scrapy.pipelines.SQLitePipeline": 300,
-    "wayback_newegg_scrapy.pipelines.CSVPipeline":    400,
-    "wayback_newegg_scrapy.alerts.AlertPipeline":     500,
+    "wayback_newegg_scrapy.pipelines.AppDatabasePipeline": 300,
+    "wayback_newegg_scrapy.alerts.AlertPipeline":          500,
 }
 
 # ---- Logging ----

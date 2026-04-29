@@ -3,7 +3,19 @@
 {% include 'partials/header.html' %}
 
 <div class="main-content" style="margin: 20px;">
-    <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <a class="back-button" href="{{ url_for('products') }}" onclick="if (history.length > 1) { history.back(); return false; }">← Back</a>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            <div class="swap-value-note" style="display: none; font-size: 0.9rem; font-weight: 600;"></div>
+            <button
+                id="itemHistoryBuildButton"
+                class="back-button"
+                type="button"
+            >
+                Add to Build
+            </button>
+        </div>
+    </div>
     <h2>Price History: {{ name }}{% if latest_price is not none %} - ${{ '%.2f'|format(latest_price) }}{% endif %}</h2>
     <div class="specs-banner">
         {% for key, value in specs.items() %}
@@ -17,32 +29,178 @@
     </div>
 
     <script id="history-data" type="application/json">{{ {'labels': dates, 'prices': prices}|tojson }}</script>
+    <script id="part-data" type="application/json">{{ {'categoryKey': category, 'categoryLabel': category.replace('_', ' ').title(), 'name': name, 'price': latest_price, 'valueNormalized': value_normalized, 'specs': specs}|tojson }}</script>
 
     <hr>
 
-    <p>Price history for {{ name }}:</p>
-    <table border="1">
-        <thead>
-            <tr><th>Date</th><th>Price</th></tr>
-        </thead>
-        <tbody>
-            {% for entry in history|reverse %}
-            <tr>
-                <td>{{ entry.snapshot_date }}</td>
-                <td>{{ entry.price }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% include 'descriptions/' + category + '_description.html' ignore missing %}
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;">
+        <section style="flex: 1 1 420px; min-width: 320px;">
+            <p>Price history for {{ name }}:</p>
+            <table border="1" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr><th>Date</th><th>Price</th></tr>
+                </thead>
+                <tbody>
+                    {% for entry in history|reverse %}
+                    <tr>
+                        <td>{{ entry.snapshot_date }}</td>
+                        <td>{{ entry.price }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section style="flex: 1 1 420px; min-width: 320px;">
+            {% include 'descriptions/' + category + '_description.html' ignore missing %}
+        </section>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const BUILD_STORAGE_KEY = 'hardwareGenieBuildList';
+            const buildButton = document.getElementById('itemHistoryBuildButton');
             const ctx = document.getElementById('priceChart').getContext('2d');
             const historyDataElement = document.getElementById('history-data');
+            const partDataElement = document.getElementById('part-data');
             const historyData = historyDataElement ? JSON.parse(historyDataElement.textContent || '{}') : {};
+            const partData = partDataElement ? JSON.parse(partDataElement.textContent || '{}') : {};
             const labels = Array.isArray(historyData.labels) ? historyData.labels : [];
             const data = Array.isArray(historyData.prices) ? historyData.prices : [];
+
+            const categoryKey = String(partData.categoryKey || '');
+            const categoryLabel = String(partData.categoryLabel || categoryKey || 'Part');
+            const partName = String(partData.name || 'Unnamed part');
+            const rawPrice = Number(partData.price);
+            const partPrice = Number.isFinite(rawPrice) ? rawPrice : null;
+            const partValueNormalized = Number(partData.valueNormalized);
+            const partSpecs = Object.entries(partData.specs || {})
+                .filter(([key, value]) => key !== 'name' && value !== null && value !== undefined && String(value).trim() !== '')
+                .map(([key, value]) => `${String(key).replace(/_/g, ' ')}: ${String(value)}`)
+                .join(' | ');
+            const historyUrl = window.location.pathname + window.location.search;
+
+            function getSavedParts() {
+                try {
+                    const raw = localStorage.getItem(BUILD_STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : [];
+                } catch (error) {
+                    return [];
+                }
+            }
+
+            function setSavedParts(parts) {
+                localStorage.setItem(BUILD_STORAGE_KEY, JSON.stringify(parts));
+            }
+
+            function normalizePartsByCategory(parts) {
+                const categoryMap = {};
+                parts.forEach((part) => {
+                    if (!part || !part.categoryKey) {
+                        return;
+                    }
+                    categoryMap[part.categoryKey] = {
+                        categoryKey: part.categoryKey,
+                        categoryLabel: part.categoryLabel || part.categoryKey,
+                        name: part.name || 'Unnamed part',
+                        price: part.price,
+                        specs: part.specs || '',
+                        historyUrl: part.historyUrl || '',
+                        valueNormalized: part.valueNormalized ?? part.value_normalized ?? part.value ?? null,
+                    };
+                });
+                return categoryMap;
+            }
+
+            function parseValueScore(value) {
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : null;
+            }
+
+            function normalizeSpecSignature(value) {
+                return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            }
+
+            function partsMatch(existingPart, partName, partSpecs) {
+                if (!existingPart) {
+                    return false;
+                }
+
+                return normalizeSpecSignature(existingPart.name) === normalizeSpecSignature(partName)
+                    && normalizeSpecSignature(existingPart.specs) === normalizeSpecSignature(partSpecs);
+            }
+
+            function getValueComparisonText(currentValue, existingValue) {
+                if (!Number.isFinite(currentValue) || !Number.isFinite(existingValue) || currentValue === existingValue || existingValue === 0) {
+                    return '';
+                }
+
+                const percentDifference = Math.abs(((currentValue - existingValue) / existingValue) * 100);
+                const direction = currentValue > existingValue ? 'better' : 'worse';
+                return `${percentDifference.toFixed(1)}% ${direction} value than current part`;
+            }
+
+            function syncBuildButtonState() {
+                if (!buildButton || !categoryKey) {
+                    return;
+                }
+
+                const categoryMap = normalizePartsByCategory(getSavedParts());
+                const existing = categoryMap[categoryKey];
+                const noteElement = buildButton.parentElement ? buildButton.parentElement.querySelector('.swap-value-note') : null;
+
+                if (noteElement) {
+                    noteElement.style.display = 'none';
+                    noteElement.textContent = '';
+                }
+
+                if (partsMatch(existing, partName, partSpecs)) {
+                    buildButton.textContent = 'Added Go to Build';
+                    buildButton.disabled = false;
+                    return;
+                }
+
+                buildButton.disabled = false;
+                buildButton.textContent = existing ? 'Swap Part' : 'Add to Build';
+
+                if (existing && noteElement) {
+                    const existingValue = parseValueScore(existing.valueNormalized);
+                    const comparisonText = getValueComparisonText(partValueNormalized, existingValue);
+                    if (comparisonText) {
+                        noteElement.textContent = comparisonText;
+                        noteElement.style.display = 'block';
+                    }
+                }
+            }
+
+            if (buildButton && categoryKey) {
+                syncBuildButtonState();
+
+                buildButton.addEventListener('click', () => {
+                    let categoryMap = normalizePartsByCategory(getSavedParts());
+                    const existing = categoryMap[categoryKey];
+
+                    if (partsMatch(existing, partName, partSpecs)) {
+                        buildButton.textContent = 'Added Go to Build';
+                        buildButton.disabled = false;
+                        window.location.href = "{{ url_for('build_page') }}" + '?return_to=' + encodeURIComponent(historyUrl);
+                        return;
+                    }
+
+                    categoryMap[categoryKey] = {
+                        categoryKey: categoryKey,
+                        categoryLabel: categoryLabel,
+                        name: partName,
+                        price: partPrice,
+                        valueNormalized: Number.isFinite(partValueNormalized) ? partValueNormalized : null,
+                        specs: partSpecs,
+                        historyUrl: historyUrl,
+                    };
+                    setSavedParts(Object.values(categoryMap));
+                    window.location.href = "{{ url_for('build_page') }}";
+                });
+            }
 
             new Chart(ctx, {
                 type: 'line',

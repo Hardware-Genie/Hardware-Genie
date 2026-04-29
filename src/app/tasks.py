@@ -1,19 +1,136 @@
 import subprocess
 import os
 import sys
+import re
+import json
+import tempfile
+import uuid
+from urllib.parse import urlparse
 from .celery_app import make_celery
-from app import app
+from app import app, db
+from app.models import ArticleSentiment
 
 celery = make_celery(app)
 
 
+def _slug_name_from_url(product_url):
+    parsed = urlparse(product_url or '')
+    path_parts = [p for p in parsed.path.split('/') if p]
+    if 'p' in path_parts:
+        p_index = path_parts.index('p')
+        if p_index > 0:
+            slug = path_parts[p_index - 1]
+        elif len(path_parts) >= 2:
+            slug = path_parts[-2]
+        else:
+            slug = path_parts[-1] if path_parts else ''
+    elif len(path_parts) >= 2:
+        slug = path_parts[-2]
+    elif path_parts:
+        slug = path_parts[-1]
+    else:
+        return None
+
+    slug = re.sub(r'-p$', '', slug, flags=re.IGNORECASE)
+    slug = re.sub(r'[-_]+', ' ', slug).strip()
+    return _shorten_name_from_slug(slug)
+
+
+def _shorten_name_from_slug(slug_text):
+    if not slug_text:
+        return None
+
+    tokens = [t for t in re.split(r'\s+', str(slug_text).strip()) if t]
+    if not tokens:
+        return None
+
+    stop_exact = {
+        'desktop', 'laptop', 'notebook', 'memory', 'ram', 'black', 'white',
+        'silver', 'red', 'blue', 'gray', 'grey', 'gold', 'kit', 'module', 'gaming'
+    }
+
+    shortened = []
+    for token in tokens:
+        lower = token.lower()
+        if re.match(r'^ddr\d+$', lower):
+            break
+        if re.match(r'^cl\d+$', lower):
+            break
+        if lower in {'cas', 'latency'}:
+            break
+        if lower in stop_exact and len(shortened) >= 3:
+            break
+        shortened.append(token)
+
+    if not shortened:
+        shortened = tokens[:7]
+
+    return ' '.join(shortened).title()
+
+
+def _normalized_task_db_uri(project_root):
+    configured = app.config.get('SQLALCHEMY_DATABASE_URI', '').strip()
+    db_uri = configured or os.environ.get('DATABASE_URL', '').strip()
+
+    if not db_uri:
+        absolute_path = os.path.abspath(os.path.join(project_root, 'instance', 'parts.db')).replace('\\', '/')
+        return f"sqlite:///{absolute_path}"
+
+    if db_uri.startswith('postgres://'):
+        db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
+
+    if db_uri.startswith('sqlite:///'):
+        sqlite_path = db_uri[len('sqlite:///'):]
+        if sqlite_path and sqlite_path != ':memory:' and not os.path.isabs(sqlite_path):
+            if sqlite_path in ('parts.db', './parts.db'):
+                sqlite_path = os.path.join(project_root, 'instance', 'parts.db')
+            else:
+                sqlite_path = os.path.join(project_root, sqlite_path)
+            normalized_sqlite_path = os.path.abspath(sqlite_path).replace('\\', '/')
+            db_uri = f"sqlite:///{normalized_sqlite_path}"
+
+    return db_uri
+
+
+def _load_summary(summary_file):
+    if not summary_file or not os.path.exists(summary_file):
+        return {
+            "canonical_name": None,
+            "inserted": 0,
+            "skipped_total": 0,
+            "skipped_existing": 0,
+            "skipped_invalid": 0,
+            "processed_total": 0,
+        }
+
+    try:
+        with open(summary_file, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    finally:
+        try:
+            os.remove(summary_file)
+        except OSError:
+            pass
+
+    return {
+        "canonical_name": data.get("canonical_name"),
+        "inserted": int(data.get("inserted") or 0),
+        "skipped_total": int(data.get("skipped_total") or 0),
+        "skipped_existing": int(data.get("skipped_existing") or 0),
+        "skipped_invalid": int(data.get("skipped_invalid") or 0),
+        "processed_total": int(data.get("processed_total") or 0),
+    }
+
+
 @celery.task(bind=True)
-def crawl_spider(self, product_name, product_url):
+def crawl_spider(self, product_url, category):
     """Celery task that runs the WaybackNeweggSpider via subprocess.
 
     This invokes the spider as a separate scrapy process, ensuring
     pipelines (CSV, SQLite) flush and close properly before returning.
-    Calling ``crawl_spider.delay(name, url)`` does not block the web request.
+    Calling ``crawl_spider.delay(url, category)`` does not block the web request.
     """
     # Get the scrapy project directory (where scrapy.cfg lives)
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -30,17 +147,24 @@ def crawl_spider(self, product_name, product_url):
         "crawl",
         "wayback_newegg",
         "-a",
-        f"product_name={product_name}",
-        "-a",
         f"product_url={product_url}",
+        "-a",
+        f"category={category}",
     ]
 
     try:
+        db_uri = _normalized_task_db_uri(project_root)
+        summary_file = os.path.join(tempfile.gettempdir(), f"scrape_summary_{uuid.uuid4().hex}.json")
         result = subprocess.run(
             cmd,
             cwd=scrapy_project_dir,
             timeout=3600,
-            env={**os.environ, 'PYTHONPATH': os.path.join(project_root, 'src')}
+            env={
+                **os.environ,
+                'PYTHONPATH': os.path.join(project_root, 'src'),
+                'DATABASE_URL': db_uri,
+                'SCRAPE_SUMMARY_FILE': summary_file,
+            }
         )
         # this hangs on queues
         #result = subprocess.run(
@@ -53,13 +177,58 @@ def crawl_spider(self, product_name, product_url):
         #)
         if result.returncode != 0:
             # Return both stdout and stderr for debugging
-            output = result.stdout + "\n" + result.stderr
-            return f"Scrapy failed with code {result.returncode}:\n{output}"
-        return f"crawled {product_name}. Output:\n{result.stdout}"
+            stdout = getattr(result, 'stdout', '') or ''
+            stderr = getattr(result, 'stderr', '') or ''
+            output = f"{stdout}\n{stderr}".strip()
+            return {
+                "status": "failed",
+                "message": f"Scrapy failed with code {result.returncode}",
+                "details": output,
+                "category": category,
+                "product_url": product_url,
+                "name": _slug_name_from_url(product_url),
+                "summary": _load_summary(summary_file),
+            }
+        return {
+            "status": "success",
+            "message": f"Crawled {product_url}",
+            "category": category,
+            "product_url": product_url,
+            "name": _slug_name_from_url(product_url),
+            "summary": _load_summary(summary_file),
+        }
     except subprocess.TimeoutExpired:
-        return f"Crawl timeout for {product_name}"
+        return {
+            "status": "failed",
+            "message": f"Crawl timeout for {product_url}",
+            "category": category,
+            "product_url": product_url,
+            "name": _slug_name_from_url(product_url),
+            "summary": {
+                "canonical_name": None,
+                "inserted": 0,
+                "skipped_total": 0,
+                "skipped_existing": 0,
+                "skipped_invalid": 0,
+                "processed_total": 0,
+            },
+        }
     except Exception as e:
-        return f"Crawl failed: {str(e)}"
+        return {
+            "status": "failed",
+            "message": f"Crawl failed: {str(e)}",
+            "category": category,
+            "product_url": product_url,
+            "name": _slug_name_from_url(product_url),
+            "summary": {
+                "canonical_name": None,
+                "inserted": 0,
+                "skipped_total": 0,
+                "skipped_existing": 0,
+                "skipped_invalid": 0,
+                "processed_total": 0,
+            },
+        }
 
 
 @celery.task(bind=True)
@@ -99,3 +268,55 @@ def crawl_tech_news(self, source=None, keywords=None, max_articles=None):
         return "Tech news crawl timed out."
     except Exception as e:
         return f"Tech news crawl failed: {str(e)}"
+
+
+@celery.task(bind=True)
+def analyze_article_heading(self, heading, category):
+    """Analyze a user-supplied article heading and persist the sentiment."""
+    normalized_heading = str(heading or '').strip()
+    normalized_category = str(category or '').strip()
+
+    if not normalized_heading or not normalized_category:
+        return {
+            'status': 'failed',
+            'message': 'Heading and category are required.',
+        }
+
+    try:
+        from app.sentiment_sampling import sentemantic_analysis
+
+        analysis = sentemantic_analysis(normalized_heading)
+        sentiment = analysis.get('label', 'unsure')
+        score = float(analysis.get('score') or 0.0)
+
+        with app.app_context():
+            record = ArticleSentiment(
+                heading=normalized_heading,
+                category=normalized_category,
+                sentiment=sentiment,
+                score=score,
+            )
+            db.session.add(record)
+            db.session.commit()
+
+        return {
+            'status': 'success',
+            'message': 'Article heading analyzed and saved.',
+            'heading': normalized_heading,
+            'category': normalized_category,
+            'sentiment': sentiment,
+            'score': score,
+        }
+    except Exception as exc:
+        with app.app_context():
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+        return {
+            'status': 'failed',
+            'message': f'Article heading analysis failed: {str(exc)}',
+            'heading': normalized_heading,
+            'category': normalized_category,
+        }

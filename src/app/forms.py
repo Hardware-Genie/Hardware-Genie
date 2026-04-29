@@ -10,16 +10,37 @@ class WebsiteToScrape(FlaskForm):
 
 
 class PartScraperForm(FlaskForm):
-    name = StringField('Product Name', validators=[DataRequired()])
+    category = SelectField(
+        'Category',
+        validators=[DataRequired()],
+        choices=[
+            ('video-card', 'Video Card'),
+            ('cpu', 'CPU'),
+            ('memory', 'Memory'),
+            ('motherboard', 'Motherboard'),
+            ('power-supply', 'Power Supply'),
+            ('internal-hard-drive', 'Internal Hard Drive'),
+        ],
+    )
     url = StringField('Product URL', validators=[DataRequired()])
     submit = SubmitField('Run Part Scraper')
 
 
 class ArticleScraperForm(FlaskForm):
-    source = StringField('Source (optional)', validators=[Optional()])
-    keywords = StringField('Keywords CSV (optional)', validators=[Optional()])
-    max_articles = IntegerField('Max Articles (optional)', validators=[Optional()])
-    submit = SubmitField('Run Article Scraper')
+    heading = StringField('Article Heading', validators=[DataRequired()])
+    category = SelectField(
+        'Category',
+        validators=[DataRequired()],
+        choices=[
+            ('cpu', 'CPU'),
+            ('memory', 'Memory'),
+            ('video-card', 'Video Card'),
+            ('motherboard', 'Motherboard'),
+            ('power-supply', 'Power Supply'),
+            ('internal-hard-drive', 'Internal Hard Drive'),
+        ],
+    )
+    submit = SubmitField('Analyze Heading')
 
 class SignupForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])

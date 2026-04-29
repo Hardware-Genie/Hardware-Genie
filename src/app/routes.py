@@ -1,4 +1,5 @@
 
+from functools import lru_cache
 from logging import exception
 from bisect import bisect_right
 
@@ -10,10 +11,10 @@ import os
 import pandas as pd
 import json
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm
-from app.models import User, SavedBuild
+from app.models import User, SavedBuild, ArticleSentiment
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
 from app import tasks
@@ -42,46 +43,46 @@ from scrapy.crawler import CrawlerProcess
 #
 # This is for the old data from the github instead of our scraper
 #
-class csv_data_reader:
-    def __init__(self, labels, price):
-        self.labels = labels
-        self.price = price
+# class csv_data_reader:
+#     def __init__(self, labels, price):
+#         self.labels = labels
+#         self.price = price
 
-    def from_csv(self, file_name, sort, ascending):
-        csv_path = f'static/data/{file_name}.csv'
-        df = pd.read_csv(csv_path)
-        df = df.dropna(subset=['price'])
-        df = df.sort_values(by=sort, ascending=ascending)
-        self.labels = df['name'].tolist()
-        self.price = df['price'].tolist()
-        # print(df['price'].median())
+#     def from_csv(self, file_name, sort, ascending):
+#         csv_path = f'static/data/{file_name}.csv'
+#         df = pd.read_csv(csv_path)
+#         df = df.dropna(subset=['price'])
+#         df = df.sort_values(by=sort, ascending=ascending)
+#         self.labels = df['name'].tolist()
+#         self.price = df['price'].tolist()
+#         # print(df['price'].median())
 
-    def to_dict(self):
-        return {
-            'labels': self.labels,
-            'price': self.price,
-        }
+#     def to_dict(self):
+#         return {
+#             'labels': self.labels,
+#             'price': self.price,
+#         }
 
-cpu_csv_reader = csv_data_reader([], [])
-cpu_csv_reader.from_csv('July 23 2025/cpu', 'price', True)
+# cpu_csv_reader = csv_data_reader([], [])
+# cpu_csv_reader.from_csv('July 23 2025/cpu', 'price', True)
 
-memory_csv_reader = csv_data_reader([], [])
-memory_csv_reader.from_csv('July 23 2025/memory', 'price', True)
+# memory_csv_reader = csv_data_reader([], [])
+# memory_csv_reader.from_csv('July 23 2025/memory', 'price', True)
 
-gpu_csv_reader = csv_data_reader([], [])
-gpu_csv_reader.from_csv('July 23 2025/video-card', 'price', True)
+# gpu_csv_reader = csv_data_reader([], [])
+# gpu_csv_reader.from_csv('July 23 2025/video-card', 'price', True)
 
-gpu_csv_reader_sort = csv_data_reader([], [])
-gpu_csv_reader_sort.from_csv('July 23 2025/video-card', 'price', False)
+# gpu_csv_reader_sort = csv_data_reader([], [])
+# gpu_csv_reader_sort.from_csv('July 23 2025/video-card', 'price', False)
 
-storage_csv_reader = csv_data_reader([], [])
-storage_csv_reader.from_csv('July 23 2025/internal-hard-drive', 'price', True)
+# storage_csv_reader = csv_data_reader([], [])
+# storage_csv_reader.from_csv('July 23 2025/internal-hard-drive', 'price', True)
 
-mb_csv_reader = csv_data_reader([], [])
-mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
+# mb_csv_reader = csv_data_reader([], [])
+# mb_csv_reader.from_csv('July 23 2025/motherboard', 'price', True)
 
-psu_csv_reader = csv_data_reader([], [])
-psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
+# psu_csv_reader = csv_data_reader([], [])
+# psu_csv_reader.from_csv('July 23 2025/power-supply', 'price', True)
 # end of the old data reader
 
 # This is for the new data from our scraper
@@ -93,12 +94,31 @@ class scraper_csv_reader:
 
     def from_csv(self, file_name, sort_by, ascending_bool):
         csv_path = f'static/data/newegg_price_history_files/{file_name}.csv'
-        df = pd.read_csv(csv_path)
+        try:
+            df = pd.read_csv(csv_path)
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError):
+            self.name = []
+            self.price = []
+            self.date = []
+            return
+
+        name_column = 'product_name' if 'product_name' in df.columns else 'name' if 'name' in df.columns else None
+        if name_column is None:
+            self.name = []
+            self.price = []
+            self.date = []
+            return
+
         df = df.dropna(subset=['price'])
+        df = df[df[name_column].fillna('').astype(str).str.strip() != '']
+
+        if sort_by not in df.columns:
+            sort_by = name_column
+
         df = df.sort_values(by=sort_by, ascending=ascending_bool)
-        self.name = df['product_name'].tolist()
+        self.name = df[name_column].fillna('').tolist()
         self.price = df['price'].tolist()
-        self.date = df['snapshot_date'].tolist()
+        self.date = df['snapshot_date'].tolist() if 'snapshot_date' in df.columns else []
 
     def to_dict(self):
         return {
@@ -109,22 +129,107 @@ class scraper_csv_reader:
 
     #dont touch these unless you know what you're doing
 new_cpu_csv_reader = scraper_csv_reader([], [], [])
-new_cpu_csv_reader.from_csv('cpu', 'product_name', True)
+new_cpu_csv_reader.from_csv('cpu', 'name', True)
 
 new_memory_csv_reader = scraper_csv_reader([], [], [])
-new_memory_csv_reader.from_csv('memory', 'product_name', True)
+new_memory_csv_reader.from_csv('memory', 'name', True)
 
 new_gpu_csv_reader = scraper_csv_reader([], [], [])
-new_gpu_csv_reader.from_csv('video-card', 'product_name', True)
+new_gpu_csv_reader.from_csv('video-card', 'name', True)
 
 new_storage_csv_reader = scraper_csv_reader([], [], [])
-new_storage_csv_reader.from_csv('internal-hard-drive', 'product_name', True)
+new_storage_csv_reader.from_csv('internal-hard-drive', 'name', True)
+
+new_motherboard_csv_reader = scraper_csv_reader([], [], [])
+new_motherboard_csv_reader.from_csv('motherboard', 'name', True)
+
+new_psu_csv_reader = scraper_csv_reader([], [], [])
+new_psu_csv_reader.from_csv('power-supply', 'name', True)
 
 
 def _normalize_memory_label(value):
     if value is None:
         return None
     return re.sub(r'\s*,\s*', ',', str(value).strip())
+
+
+def _parse_memory_modules(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*[,xX]\s*(\d+(?:\.\d+)?)\s*(TB|GB)?', text)
+    if not match:
+        numbers = re.findall(r'\d+(?:\.\d+)?', text)
+        if len(numbers) < 2:
+            return None
+        match = (numbers[0], numbers[1], re.search(r'(TB|GB)', text, re.I).group(1) if re.search(r'(TB|GB)', text, re.I) else 'GB')
+        count_text, size_text, unit_text = match
+    else:
+        count_text, size_text, unit_text = match.group(1), match.group(2), match.group(3) or 'GB'
+
+    try:
+        module_count = float(count_text)
+        module_size = float(size_text)
+    except (TypeError, ValueError):
+        return None
+
+    unit = str(unit_text or 'GB').upper()
+    if unit == 'TB':
+        module_size *= 1024
+
+    return {
+        'count': module_count,
+        'size': module_size,
+    }
+
+
+def _parse_memory_speed(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    numbers = re.findall(r'\d+(?:\.\d+)?', text)
+    if len(numbers) < 2:
+        return None
+
+    try:
+        ddr_type = float(numbers[0])
+        mhz = float(numbers[1])
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        'ddr_type': ddr_type,
+        'mhz': mhz,
+    }
+
+
+def _parse_memory_latency(value):
+    if value is None:
+        return None
+
+    text = str(value).strip().replace(',', '')
+    if not text:
+        return None
+
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        numbers = re.findall(r'\d+(?:\.\d+)?', text)
+        if not numbers:
+            return None
+
+        try:
+            return float(numbers[0])
+        except (TypeError, ValueError):
+            return None
 
 
 CATEGORY_FILTER_PRIORITY = {
@@ -164,12 +269,49 @@ TREND_CATEGORY_LABELS = {
     'internal_hard_drive': 'Hard Drives',
 }
 
+HISTORY_SIGNATURE_COLUMNS = {
+    'cpu': ['core_count', 'core_clock', 'boost_clock', 'tdp', 'graphics', 'smt'],
+    'memory': ['modules', 'speed', 'cas_latency', 'first_word_latency', 'color'],
+    'video_card': ['chipset', 'memory', 'core_clock', 'boost_clock', 'length'],
+    'motherboard': ['socket', 'form_factor', 'max_memory', 'memory_slots'],
+    'power_supply': ['type', 'efficiency', 'wattage', 'modular'],
+    'internal_hard_drive': ['capacity', 'type', 'interface', 'form_factor', 'cache'],
+}
+
+GROUPING_IGNORED_COLUMNS = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
+
+
+def _fetch_latest_row_for_part(table_type, part_name):
+    if not table_type or not part_name:
+        return None
+    if table_type not in BUILD_TABLE_LABELS:
+        return None
+    if not _table_exists(table_type):
+        return None
+
+    sql = text(f"SELECT * FROM {table_type} WHERE name = :name ORDER BY snapshot_date DESC LIMIT 1")
+    row = db.session.execute(sql, {'name': part_name}).mappings().first()
+    return dict(row) if row else None
+
 
 def _is_admin_user():
     if not getattr(current_user, 'is_authenticated', False):
         return False
 
     return bool(getattr(current_user, 'is_admin', False))
+
+
+def _hash_password(password):
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return hashed_password.decode('utf-8')
+
+
+def _ensure_bcrypt_bytes(value):
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode('utf-8')
+    return str(value).encode('utf-8')
 
 
 def _safe_parse_price(value):
@@ -179,8 +321,74 @@ def _safe_parse_price(value):
         return None
 
 
+def _normalize_history_filter_value(value):
+    text = str(value or '').strip().lower().replace(' ', '').replace(',', '')
+    if not text:
+        return text
+
+    if '.' in text:
+        text = text.rstrip('0').rstrip('.')
+
+    return text
+
+
+def _slug_name_from_url(product_url):
+    parsed = urlparse(product_url or '')
+    path_parts = [p for p in parsed.path.split('/') if p]
+    if 'p' in path_parts:
+        p_index = path_parts.index('p')
+        if p_index > 0:
+            slug = path_parts[p_index - 1]
+        elif len(path_parts) >= 2:
+            slug = path_parts[-2]
+        else:
+            slug = path_parts[-1] if path_parts else ''
+    elif len(path_parts) >= 2:
+        slug = path_parts[-2]
+    elif path_parts:
+        slug = path_parts[-1]
+    else:
+        return None
+
+    slug = re.sub(r'-p$', '', slug, flags=re.IGNORECASE)
+    slug = re.sub(r'[-_]+', ' ', slug).strip()
+
+    tokens = [t for t in re.split(r'\s+', slug) if t]
+    if not tokens:
+        return None
+
+    stop_exact = {
+        'desktop', 'laptop', 'notebook', 'memory', 'ram', 'black', 'white',
+        'silver', 'red', 'blue', 'gray', 'grey', 'gold', 'kit', 'module', 'gaming'
+    }
+
+    shortened = []
+    for token in tokens:
+        lower = token.lower()
+        if re.match(r'^ddr\d+$', lower):
+            break
+        if re.match(r'^cl\d+$', lower):
+            break
+        if lower in {'cas', 'latency'}:
+            break
+        if lower in stop_exact and len(shortened) >= 3:
+            break
+        shortened.append(token)
+
+    if not shortened:
+        shortened = tokens[:7]
+
+    return ' '.join(shortened).title()
+
+
+@lru_cache(maxsize=1)
+def _known_tables():
+    with db.engine.connect() as connection:
+        return frozenset(inspect(connection).get_table_names())
+
+
 def _table_exists(table_name):
-    return inspect(db.engine).has_table(table_name)
+    return table_name in _known_tables()
 
 
 def _percentile_rank(sorted_values, value):
@@ -196,14 +404,49 @@ def _percentile_rank(sorted_values, value):
     return (rank_index / (total_values - 1)) * 100.0
 
 
+@lru_cache(maxsize=None)
+def _table_columns(table_name):
+    with db.engine.connect() as connection:
+        inst = inspect(connection)
+        return [c['name'] for c in inst.get_columns(table_name)]
+
+
+def _category_group_columns(table_name):
+    columns = _table_columns(table_name)
+    ignored = {column.lower() for column in GROUPING_IGNORED_COLUMNS}
+    return [column for column in columns if column.lower() not in ignored]
+
+
+def _sorted_value_baseline_for_table(table_name, group_cols):
+    if not table_name or not group_cols:
+        return []
+
+    group_by_cols = ", ".join(group_cols)
+    baseline_sql = text(f"""
+    SELECT price
+    FROM (
+        SELECT price,
+               ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
+        FROM {table_name}
+    )
+    WHERE rn = 1
+    """)
+
+    baseline_rows = db.session.execute(baseline_sql).mappings().all()
+    baseline_values = []
+    for baseline_row in baseline_rows:
+        baseline_value = _safe_parse_price(baseline_row.get('price'))
+        if baseline_value is not None:
+            baseline_values.append(baseline_value)
+
+    return sorted(baseline_values)
+
+
 def _build_category_items(table_name):
     if not _table_exists(table_name):
         return []
 
-    inst = inspect(db.engine)
-    columns = [c['name'] for c in inst.get_columns(table_name)]
-    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
-    group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
+    group_cols = _category_group_columns(table_name)
 
     if not group_cols:
         return []
@@ -305,6 +548,27 @@ def _build_trend_series(table_name):
     }
 
 
+def _build_article_sentiment_items(category):
+    rows = (
+        ArticleSentiment.query
+        .filter_by(category=category)
+        .order_by(ArticleSentiment.created_at.desc(), ArticleSentiment.id.desc())
+        .limit(5)
+        .all()
+    )
+
+    items = []
+    for row in rows:
+        items.append({
+            'heading': row.heading,
+            'sentiment': row.sentiment,
+            'score': round(float(row.score or 0.0), 4),
+            'created_at': row.created_at.strftime('%Y-%m-%d %H:%M') if row.created_at else '',
+        })
+
+    return items
+
+
 
 # #used to add the old data into a database
 # csv_files = [
@@ -354,7 +618,7 @@ def signup():
             return render_template('signup.html', form=form, same_email=0, miss_match=0, form_errors=form.errors)
 
         if password == form.confirm_password.data:
-            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            hashed = _hash_password(password)
             newUser = User(email=email,username=form.username.data, password_hash=hashed)
             db.session.add(newUser)
             # don't commit if there is another user with the same id, or any other error that occurs with the commit
@@ -388,7 +652,7 @@ def login():
         #    
         #Authenticate user
         try:
-            if bcrypt.checkpw((form.password.data).encode('utf-8'), user.password_hash):
+            if user and bcrypt.checkpw((form.password.data or '').encode('utf-8'), _ensure_bcrypt_bytes(user.password_hash)):
                 login_user(user)
                 print("User logged in successfully")
                 return redirect(url_for('index'))
@@ -448,7 +712,7 @@ def reset_password():
         elif new_password != (form.confirm_new_password.data or ''):
             form.confirm_new_password.errors.append('Passwords must match.')
         else:
-            user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            user.password_hash = _hash_password(new_password)
             db.session.commit()
             password_reset = True
             form.email.data = ''
@@ -511,7 +775,7 @@ def profile():
 
             new_password = form.new_password.data or ''
             if new_password.strip():
-                current_user.password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+                current_user.password_hash = _hash_password(new_password)
 
             db.session.commit()
             return redirect(url_for('profile', updated=1))
@@ -554,6 +818,25 @@ def scrapers():
     return render_template('scrapers.html')
 
 
+def _invoke_scraper_lambda(url, category):
+    """Invoke the wayback scraper Lambda asynchronously and return the invocation ID."""
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("boto3 is required to invoke the scraper Lambda.") from exc
+
+    lambda_name = os.environ.get('SCRAPER_LAMBDA_NAME', 'hardware-genie-wayback-scraper')
+    client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION', 'us-west-1'))
+    response = client.invoke(
+        FunctionName=lambda_name,
+        InvocationType='Event',
+        Payload=json.dumps({
+            'products': [{'url': url, 'category': category}]
+        }).encode(),
+    )
+    return response.get('ResponseMetadata', {}).get('RequestId', 'unknown')
+
+
 @app.route('/scrapers/parts', methods=['GET', 'POST'])
 @login_required
 def scraper_parts():
@@ -562,11 +845,50 @@ def scraper_parts():
 
     form = PartScraperForm()
     if form.validate_on_submit():
-        name = form.name.data
+        category = form.category.data
         url = form.url.data
-        task = tasks.crawl_spider.delay(name, url)
-        return redirect(url_for('scraper_status', task_id=task.id, scraper='parts'))
+        use_lambda = os.environ.get('SCRAPER_LAMBDA_NAME')
+        if use_lambda:
+            invocation_id = _invoke_scraper_lambda(url, category)
+            return redirect(url_for('scraper_status_lambda', invocation_id=invocation_id, scraped_category=category, scraped_url=url))
+        task = tasks.crawl_spider.delay(url, category)
+        return redirect(url_for('scraper_status', task_id=task.id, scraper='parts', scraped_category=category, scraped_url=url))
     return render_template('scraper_parts.html', form=form)
+
+
+@app.route('/scraper/status/lambda/<invocation_id>')
+@login_required
+def scraper_status_lambda(invocation_id):
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    scraped_category = request.args.get('scraped_category')
+    scraped_url = request.args.get('scraped_url')
+    part_name = _slug_name_from_url(scraped_url) if scraped_url else None
+    part_history_url = None
+
+    if scraped_category and scraped_url and part_name:
+        table_type = scraped_category.replace('-', '_')
+        history_params = {'table_type': table_type, 'name': part_name}
+        latest_row = _fetch_latest_row_for_part(table_type, part_name)
+        for column in HISTORY_SIGNATURE_COLUMNS.get(table_type, []):
+            value = latest_row.get(column) if latest_row else None
+            if value in (None, ''):
+                continue
+            history_params[column] = value
+        part_history_url = url_for('item_history', **history_params)
+
+    return render_template(
+        'scraper_status.html',
+        task_id=invocation_id,
+        state='LAMBDA_INVOKED',
+        result={'status': 'invoked', 'message': 'Lambda invoked asynchronously. Results will appear in the database shortly.'},
+        info=None,
+        back_url=url_for('scraper_parts'),
+        back_label='Back to Part Scraper',
+        part_history_url=part_history_url,
+        scrape_summary=None,
+    )
 
 
 @app.route('/scrapers/articles', methods=['GET', 'POST'])
@@ -577,10 +899,9 @@ def scraper_articles():
 
     form = ArticleScraperForm()
     if form.validate_on_submit():
-        source = (form.source.data or '').strip() or None
-        keywords = (form.keywords.data or '').strip() or None
-        max_articles = form.max_articles.data
-        task = tasks.crawl_tech_news.delay(source=source, keywords=keywords, max_articles=max_articles)
+        heading = (form.heading.data or '').strip()
+        category = (form.category.data or '').strip()
+        task = tasks.analyze_article_heading.delay(heading=heading, category=category)
         return redirect(url_for('scraper_status', task_id=task.id, scraper='articles'))
     return render_template('scraper_articles.html', form=form)
 
@@ -594,9 +915,38 @@ def scraper_status(task_id):
     from app.tasks import celery
     result = AsyncResult(task_id, app=celery)
     scraper_type = request.args.get('scraper', 'parts')
+    scraped_category = request.args.get('scraped_category')
+    scraped_url = request.args.get('scraped_url')
+    part_history_url = None
+
+    task_payload = result.result if isinstance(result.result, dict) else {}
+    scrape_summary = task_payload.get('summary') if isinstance(task_payload.get('summary'), dict) else None
+    if not scraped_category:
+        scraped_category = task_payload.get('category')
+    if not scraped_url:
+        scraped_url = task_payload.get('product_url')
+
+    if scraper_type == 'parts' and scraped_category and scraped_url:
+        table_type = scraped_category.replace('-', '_')
+        part_name = (
+            (scrape_summary or {}).get('canonical_name')
+            or task_payload.get('name')
+            or _slug_name_from_url(scraped_url)
+        )
+        if part_name:
+            history_params = {'table_type': table_type, 'name': part_name}
+            latest_row = _fetch_latest_row_for_part(table_type, part_name)
+            for column in HISTORY_SIGNATURE_COLUMNS.get(table_type, []):
+                value = latest_row.get(column) if latest_row else None
+                if value in (None, ''):
+                    continue
+                history_params[column] = value
+
+            part_history_url = url_for('item_history', **history_params)
+
     if scraper_type == 'articles':
         back_url = url_for('scraper_articles')
-        back_label = 'Back to Article Scraper'
+        back_label = 'Back to Article Analyzer'
     else:
         back_url = url_for('scraper_parts')
         back_label = 'Back to Part Scraper'
@@ -609,6 +959,8 @@ def scraper_status(task_id):
         info=result.info,
         back_url=back_url,
         back_label=back_label,
+        part_history_url=part_history_url,
+        scrape_summary=scrape_summary,
     )
 
 
@@ -623,11 +975,23 @@ def search():
     max_price = request.args.get('max_price', type=float)
     min_value = request.args.get('min_value', type=float)
     max_value = request.args.get('max_value', type=float)
+    min_modules_count = request.args.get('min_modules_count', type=float)
+    max_modules_count = request.args.get('max_modules_count', type=float)
+    min_modules_size = request.args.get('min_modules_size', type=float)
+    max_modules_size = request.args.get('max_modules_size', type=float)
+    min_speed_ddr_type = request.args.get('min_speed_ddr_type', type=float)
+    max_speed_ddr_type = request.args.get('max_speed_ddr_type', type=float)
+    min_speed_mhz = request.args.get('min_speed_mhz', type=float)
+    max_speed_mhz = request.args.get('max_speed_mhz', type=float)
+    min_cas_latency = request.args.get('min_cas_latency', type=float)
+    max_cas_latency = request.args.get('max_cas_latency', type=float)
+    min_first_word_latency = request.args.get('min_first_word_latency', type=float)
+    max_first_word_latency = request.args.get('max_first_word_latency', type=float)
     per_page = 50
     active_filter_values = {
         key: [value for value in values if value]
         for key, values in request.args.lists()
-        if key not in ['q', 'page', 'sort', 'min_price', 'max_price', 'min_value', 'max_value', 'from_build']
+        if key not in ['q', 'page', 'sort', 'min_price', 'max_price', 'min_value', 'max_value', 'min_modules_count', 'max_modules_count', 'min_modules_size', 'max_modules_size', 'min_speed_ddr_type', 'max_speed_ddr_type', 'min_speed_mhz', 'max_speed_mhz', 'min_cas_latency', 'max_cas_latency', 'min_first_word_latency', 'max_first_word_latency', 'from_build']
     }
     selected_category = active_filter_values.get('category', [None])[0] if 'category' in active_filter_values else None
     if selected_category:
@@ -639,18 +1003,22 @@ def search():
     filter_options = {}
     price_range = {'min': float('inf'), 'max': 0}
     value_range = {'min': float('inf'), 'max': 0}
+    module_count_range = {'min': float('inf'), 'max': 0}
+    module_size_range = {'min': float('inf'), 'max': 0}
+    speed_ddr_type_range = {'min': float('inf'), 'max': 0}
+    speed_mhz_range = {'min': float('inf'), 'max': 0}
+    cas_latency_range = {'min': float('inf'), 'max': 0}
+    first_word_latency_range = {'min': float('inf'), 'max': 0}
     value_samples_by_table = {}
     
     tables = ['video_card', 'cpu', 'power_supply', 'motherboard', 'memory', 'internal_hard_drive']
-    grouping_ignored_cols = ['price', 'snapshot_date', 'id', 'price_per_gb', 'price/gb', 'table_name', 'type_label', 'identity_params', 'value', 'deal_quality']
-    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count']
+    filter_ignored_cols = ['id', 'snapshot_date', 'table_name', 'type_label', 'identity_params', 'name', 'price', 'value', 'snapshot_count', 'modules', 'speed', 'cas_latency', 'first_word_latency']
 
     for table_name in tables_to_search:
-        if not _table_exists(table_name):
+        if table_name not in tables:
             continue
 
-        inst = inspect(db.engine)
-        columns = [c['name'] for c in inst.get_columns(table_name)]
+        columns = _table_columns(table_name)
         
         where_parts = []
         params = {}
@@ -660,7 +1028,7 @@ def search():
             params["q"] = f"%{query}%"
 
         # 2. Define identifying columns and grouping logic
-        group_cols = [c for c in columns if c.lower() not in grouping_ignored_cols]
+        group_cols = _category_group_columns(table_name)
         
         # 3. Build the final SQL - use ROW_NUMBER window function for better performance
         where_clause = " AND ".join(where_parts) if where_parts else "1=1"
@@ -678,6 +1046,12 @@ def search():
         )
         WHERE rn = 1
         """)
+
+        # Build the category-wide value baseline from all latest rows,
+        # independent of search text and active filters.
+        baseline_values = _sorted_value_baseline_for_table(table_name, group_cols)
+        if baseline_values:
+            value_samples_by_table[table_name] = baseline_values
         
         # 4. Execute and Process
         results = db.session.execute(sql, params).mappings().all()
@@ -703,15 +1077,34 @@ def search():
                         filter_options[key] = set()
                     filter_options[key].add(normalized_val)
 
-            # Build a stable per-category value baseline from all latest rows,
-            # independent of active filters.
+            modules_dimensions = _parse_memory_modules(item.get('modules'))
+            if modules_dimensions:
+                module_count_range['min'] = min(module_count_range['min'], modules_dimensions['count'])
+                module_count_range['max'] = max(module_count_range['max'], modules_dimensions['count'])
+                module_size_range['min'] = min(module_size_range['min'], modules_dimensions['size'])
+                module_size_range['max'] = max(module_size_range['max'], modules_dimensions['size'])
+
+            speed_dimensions = _parse_memory_speed(item.get('speed'))
+            if speed_dimensions:
+                speed_ddr_type_range['min'] = min(speed_ddr_type_range['min'], speed_dimensions['ddr_type'])
+                speed_ddr_type_range['max'] = max(speed_ddr_type_range['max'], speed_dimensions['ddr_type'])
+                speed_mhz_range['min'] = min(speed_mhz_range['min'], speed_dimensions['mhz'])
+                speed_mhz_range['max'] = max(speed_mhz_range['max'], speed_dimensions['mhz'])
+
+            cas_latency_value = _parse_memory_latency(item.get('cas_latency'))
+            if cas_latency_value is not None:
+                cas_latency_range['min'] = min(cas_latency_range['min'], cas_latency_value)
+                cas_latency_range['max'] = max(cas_latency_range['max'], cas_latency_value)
+
+            first_word_latency_value = _parse_memory_latency(item.get('first_word_latency'))
+            if first_word_latency_value is not None:
+                first_word_latency_range['min'] = min(first_word_latency_range['min'], first_word_latency_value)
+                first_word_latency_range['max'] = max(first_word_latency_range['max'], first_word_latency_value)
+
+            # Keep raw DB value for scoring against the category-wide baseline.
             item_value_raw = _safe_parse_price(item.get('value'))
             item['value_raw'] = item_value_raw
             item['value_normalized'] = None
-            if item_value_raw is not None:
-                if table_name not in value_samples_by_table:
-                    value_samples_by_table[table_name] = []
-                value_samples_by_table[table_name].append(item_value_raw)
 
             # Apply selected checkbox filters after building options to avoid shrinking menus.
             item_matches_active_filters = True
@@ -724,6 +1117,55 @@ def search():
                 if normalized_item_val not in normalized_selected_vals:
                     item_matches_active_filters = False
                     break
+
+            if item_matches_active_filters and table_name == 'memory' and any(value is not None for value in [min_modules_count, max_modules_count, min_modules_size, max_modules_size, min_speed_ddr_type, max_speed_ddr_type, min_speed_mhz, max_speed_mhz, min_cas_latency, max_cas_latency, min_first_word_latency, max_first_word_latency]):
+                if min_modules_count is not None or max_modules_count is not None or min_modules_size is not None or max_modules_size is not None:
+                    if not modules_dimensions:
+                        item_matches_active_filters = False
+                    else:
+                        module_count = modules_dimensions['count']
+                        module_size = modules_dimensions['size']
+                        if min_modules_count is not None and module_count < min_modules_count:
+                            item_matches_active_filters = False
+                        if max_modules_count is not None and module_count > max_modules_count:
+                            item_matches_active_filters = False
+                        if min_modules_size is not None and module_size < min_modules_size:
+                            item_matches_active_filters = False
+                        if max_modules_size is not None and module_size > max_modules_size:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_speed_ddr_type is not None or max_speed_ddr_type is not None or min_speed_mhz is not None or max_speed_mhz is not None):
+                    if not speed_dimensions:
+                        item_matches_active_filters = False
+                    else:
+                        speed_ddr_type = speed_dimensions['ddr_type']
+                        speed_mhz = speed_dimensions['mhz']
+                        if min_speed_ddr_type is not None and speed_ddr_type < min_speed_ddr_type:
+                            item_matches_active_filters = False
+                        if max_speed_ddr_type is not None and speed_ddr_type > max_speed_ddr_type:
+                            item_matches_active_filters = False
+                        if min_speed_mhz is not None and speed_mhz < min_speed_mhz:
+                            item_matches_active_filters = False
+                        if max_speed_mhz is not None and speed_mhz > max_speed_mhz:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_cas_latency is not None or max_cas_latency is not None):
+                    if cas_latency_value is None:
+                        item_matches_active_filters = False
+                    else:
+                        if min_cas_latency is not None and cas_latency_value < min_cas_latency:
+                            item_matches_active_filters = False
+                        if max_cas_latency is not None and cas_latency_value > max_cas_latency:
+                            item_matches_active_filters = False
+
+                if item_matches_active_filters and (min_first_word_latency is not None or max_first_word_latency is not None):
+                    if first_word_latency_value is None:
+                        item_matches_active_filters = False
+                    else:
+                        if min_first_word_latency is not None and first_word_latency_value < min_first_word_latency:
+                            item_matches_active_filters = False
+                        if max_first_word_latency is not None and first_word_latency_value > max_first_word_latency:
+                            item_matches_active_filters = False
 
             if not item_matches_active_filters:
                 continue
@@ -740,7 +1182,7 @@ def search():
 
     # Compute percentile per category and map percentile (0-100) to value score (0-5).
     sorted_value_samples_by_table = {
-        table_name: sorted(values)
+        table_name: values
         for table_name, values in value_samples_by_table.items()
         if values
     }
@@ -769,6 +1211,39 @@ def search():
     if value_range['min'] != float('inf'):
         value_range['min'] = 0.0
         value_range['max'] = 5.0
+
+    if module_count_range['min'] != float('inf'):
+        module_count_range['min'] = int(module_count_range['min'])
+        module_count_range['max'] = int(module_count_range['max'])
+    else:
+        module_count_range = {'min': 1, 'max': 8}
+
+    if module_size_range['min'] == float('inf'):
+        module_size_range = {'min': 4, 'max': 64}
+
+    if speed_ddr_type_range['min'] != float('inf'):
+        speed_ddr_type_range['min'] = int(speed_ddr_type_range['min'])
+        speed_ddr_type_range['max'] = int(speed_ddr_type_range['max'])
+    else:
+        speed_ddr_type_range = {'min': 0, 'max': 0}
+
+    if speed_mhz_range['min'] != float('inf'):
+        speed_mhz_range['min'] = int(speed_mhz_range['min'])
+        speed_mhz_range['max'] = int(speed_mhz_range['max'])
+    else:
+        speed_mhz_range = {'min': 0, 'max': 0}
+
+    if cas_latency_range['min'] != float('inf'):
+        cas_latency_range['min'] = round(cas_latency_range['min'], 3)
+        cas_latency_range['max'] = round(cas_latency_range['max'], 3)
+    else:
+        cas_latency_range = {'min': 0, 'max': 0}
+
+    if first_word_latency_range['min'] != float('inf'):
+        first_word_latency_range['min'] = round(first_word_latency_range['min'], 3)
+        first_word_latency_range['max'] = round(first_word_latency_range['max'], 3)
+    else:
+        first_word_latency_range = {'min': 0, 'max': 0}
 
     # Apply numeric range filters after collecting latest rows per item
     if min_price is not None or max_price is not None or min_value is not None or max_value is not None:
@@ -887,6 +1362,30 @@ def search():
         pagination_query_items.append(('min_value', min_value))
     if max_value is not None:
         pagination_query_items.append(('max_value', max_value))
+    if min_modules_count is not None:
+        pagination_query_items.append(('min_modules_count', min_modules_count))
+    if max_modules_count is not None:
+        pagination_query_items.append(('max_modules_count', max_modules_count))
+    if min_modules_size is not None:
+        pagination_query_items.append(('min_modules_size', min_modules_size))
+    if max_modules_size is not None:
+        pagination_query_items.append(('max_modules_size', max_modules_size))
+    if min_speed_ddr_type is not None:
+        pagination_query_items.append(('min_speed_ddr_type', min_speed_ddr_type))
+    if max_speed_ddr_type is not None:
+        pagination_query_items.append(('max_speed_ddr_type', max_speed_ddr_type))
+    if min_speed_mhz is not None:
+        pagination_query_items.append(('min_speed_mhz', min_speed_mhz))
+    if max_speed_mhz is not None:
+        pagination_query_items.append(('max_speed_mhz', max_speed_mhz))
+    if min_cas_latency is not None:
+        pagination_query_items.append(('min_cas_latency', min_cas_latency))
+    if max_cas_latency is not None:
+        pagination_query_items.append(('max_cas_latency', max_cas_latency))
+    if min_first_word_latency is not None:
+        pagination_query_items.append(('min_first_word_latency', min_first_word_latency))
+    if max_first_word_latency is not None:
+        pagination_query_items.append(('max_first_word_latency', max_first_word_latency))
     pagination_query_string = urlencode(pagination_query_items, doseq=True)
     
     if price_range['min'] == float('inf'):
@@ -918,6 +1417,24 @@ def search():
                            max_price=max_price,
                            min_value=min_value,
                            max_value=max_value,
+                           min_modules_count=min_modules_count,
+                           max_modules_count=max_modules_count,
+                           min_modules_size=min_modules_size,
+                           max_modules_size=max_modules_size,
+                           module_count_range=module_count_range,
+                           module_size_range=module_size_range,
+                           min_speed_ddr_type=min_speed_ddr_type,
+                           max_speed_ddr_type=max_speed_ddr_type,
+                           min_speed_mhz=min_speed_mhz,
+                           max_speed_mhz=max_speed_mhz,
+                           min_cas_latency=min_cas_latency,
+                           max_cas_latency=max_cas_latency,
+                           min_first_word_latency=min_first_word_latency,
+                           max_first_word_latency=max_first_word_latency,
+                           speed_ddr_type_range=speed_ddr_type_range,
+                           speed_mhz_range=speed_mhz_range,
+                           cas_latency_range=cas_latency_range,
+                           first_word_latency_range=first_word_latency_range,
                            from_build=from_build)
 
 
@@ -939,6 +1456,7 @@ def trends():
             'min_prices': trend_series['min_prices'],
             'max_prices': trend_series['max_prices'],
             'sample_counts': trend_series['sample_counts'],
+            'article_sentiments': _build_article_sentiment_items(table_name),
         })
 
     return render_template('trends.html', trend_data=trend_data)
@@ -1039,8 +1557,9 @@ def saved_build_detail(build_id):
 def item_history():
     table_type = request.args.get('table_type')
     category = (table_type or '').strip().lower().replace('-', '_')
+    passed_value_normalized = request.args.get('value_normalized')
 
-    ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt']
+    ignored = ['table_type', 'price_per_gb', 'price/gb', 'microarchitecture', 'smt', 'value_normalized']
     filters = {k: v for k, v in request.args.items() if k not in ignored and v != 'None'}
     
     # Build a normalized WHERE clause
@@ -1049,12 +1568,15 @@ def item_history():
     clean_params = {}
     
     for k, v in filters.items():
-        # Strip spaces from the search value coming from the URL
-        clean_val = str(v).replace(" ", "").lower()
-        where_parts.append(f"REPLACE(LOWER(CAST({k} AS TEXT)), ' ', '') = :{k}_clean")
+        # Normalize both sides so Postgres text, floats, and comma-formatted values compare consistently.
+        clean_val = _normalize_history_filter_value(v)
+        where_parts.append(
+            f"REPLACE(REPLACE(LOWER(CASE WHEN CAST({k} AS TEXT) LIKE '%.%' "
+            f"THEN RTRIM(RTRIM(CAST({k} AS TEXT), '0'), '.') ELSE CAST({k} AS TEXT) END), ',', ''), ' ', '') = :{k}_clean"
+        )
         clean_params[f"{k}_clean"] = clean_val
 
-    where_clause = " AND ".join(where_parts)
+    where_clause = " AND ".join(where_parts) if where_parts else "1=1"
     sql = text(f"SELECT * FROM {table_type} WHERE {where_clause} ORDER BY snapshot_date ASC")
     
     rows = db.session.execute(sql, clean_params).mappings().all()
@@ -1074,12 +1596,29 @@ def item_history():
         except (ValueError, TypeError):
             prices.append(None)
 
+    latest_value_normalized = None
+    if category and _table_exists(category):
+        group_cols = _category_group_columns(category)
+        baseline_values = _sorted_value_baseline_for_table(category, group_cols)
+        latest_row = rows[-1] if rows else None
+        latest_value_raw = _safe_parse_price(latest_row.get('price')) if latest_row else None
+        latest_percentile = _percentile_rank(baseline_values, latest_value_raw)
+        if latest_percentile is not None:
+            latest_value_normalized = round((latest_percentile / 100.0) * 5.0, 3)
+
+    if latest_value_normalized is None and passed_value_normalized not in (None, '', 'None'):
+        try:
+            latest_value_normalized = float(passed_value_normalized)
+        except (TypeError, ValueError):
+            latest_value_normalized = None
+
     return render_template('item_history.html', 
                            history=rows, 
                            specs=filters,
                            name=product_name,
                            category=category,
                            latest_price=prices[-1] if prices else None,
+                           value_normalized=latest_value_normalized,
                            dates=labels,
                            prices=prices)
 
@@ -1143,9 +1682,9 @@ def storage_graphs():
 
 @app.route('/motherboard', methods=['GET', 'POST'])
 def motherboard_page():
-    dict=mb_csv_reader.to_dict()
-    labels = dict['labels']
-    price = dict['price']
+    data = new_motherboard_csv_reader.to_dict()
+    labels = data['name']
+    price = data['price']
     return render_template('motherboard_page.html', labels=labels, price=price)
 
 @app.route('/motherboardgraphs', methods=['GET', 'POST'])
@@ -1155,9 +1694,9 @@ def motherboard_graphs():
 
 @app.route('/powersupply', methods=['GET', 'POST'])
 def powersupply_page():
-    dict=psu_csv_reader.to_dict()
-    labels = dict['labels']
-    price = dict['price']
+    data = new_psu_csv_reader.to_dict()
+    labels = data['name']
+    price = data['price']
     return render_template('powersupply_page.html', labels=labels, price=price)
 
 @app.route('/powersupplygraphs', methods=['GET', 'POST'])

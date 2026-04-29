@@ -4,19 +4,16 @@
 <section class="scraper-page">
     <div class="scraper-card">
         <a class="back-button" href="{{ url_for('scrapers') }}">← Back to Scrapers</a>
-        <h1 class="scraper-title">Article Scraper</h1>
-        <p class="scraper-subtitle">Scrape hardware news articles with optional source, keyword, and result limits.</p>
+        <h1 class="scraper-title">Article Sentiment Analyzer</h1>
+        <p class="scraper-subtitle">Save the sentiment of an article heading and group it by category for the trends page.</p>
 
         <form class="auth-form scraper-form" action="" method="POST" novalidate>
             {{ form.hidden_tag() }}
-            <label class="auth-label" for="source">{{ form.source.label.text }}</label>
-            {{ form.source(class_='auth-input', id='source', size=50, placeholder='example: tomshardware') }}
+            <label class="auth-label" for="heading">{{ form.heading.label.text }}</label>
+            {{ form.heading(class_='auth-input', id='heading', size=80, placeholder='Example: NVIDIA launches new RTX GPU with lower power draw') }}
 
-            <label class="auth-label" for="keywords">{{ form.keywords.label.text }}</label>
-            {{ form.keywords(class_='auth-input', id='keywords', size=50, placeholder='RTX,GPU,AMD') }}
-
-            <label class="auth-label" for="max_articles">{{ form.max_articles.label.text }}</label>
-            {{ form.max_articles(class_='auth-input', id='max_articles', min=1, placeholder='50') }}
+            <label class="auth-label" for="category">{{ form.category.label.text }}</label>
+            {{ form.category(class_='auth-input', id='category') }}
 
             {{ form.submit(class_='auth-submit') }}
         </form>

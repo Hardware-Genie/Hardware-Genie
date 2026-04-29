@@ -554,6 +554,107 @@ select {
 .scraper-form .auth-submit {
   margin-top: 6px;
   align-self: flex-start;
+
+.scraper-status-card {
+  max-width: 760px;
+}
+
+.scraper-button-label{
+  display: inline-block;
+  padding: 8px 14px;
+  background-color: var(--action-button-bg-color);
+  color: var(--surface-base-color);
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 14px;
+  background: #edf2f7;
+  color: #334155;
+}
+
+.status-pill--success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-pill--failure {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill--pending,
+.status-pill--progress,
+.status-pill--started {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.status-message {
+  margin: 0 0 12px;
+  color: var(--secondary-content-text-color);
+}
+
+.status-message--success {
+  color: var(--success-text-color);
+}
+
+.status-message--error {
+  color: var(--error-text-color);
+}
+
+.status-meta {
+  margin: 8px 0 0;
+  color: var(--meta-text-color);
+  word-break: break-word;
+}
+
+.scrape-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+
+.scrape-summary-item {
+  border: 1px solid var(--category-card-inner-border-color);
+  background: var(--category-card-inner-bg-color);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.scrape-summary-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--meta-text-color);
+  margin-bottom: 5px;
+}
+
+.scrape-summary-value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary-content-text-color);
+}
+
+.status-primary-action {
+  margin-top: 14px;
+  text-decoration: none;
+  width: fit-content;
+}
 }
 
 /* New Decorative Elements */
@@ -654,6 +755,119 @@ select {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+}
+
+.dual-range-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dual-range-control__inputs {
+  display: flex;
+  gap: 12px;
+}
+
+.dual-range-control__input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dual-range-control__input-group--end {
+  align-items: flex-end;
+}
+
+.dual-range-control__input-group input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.dual-range-control__input-group input[type="number"]::-webkit-outer-spin-button,
+.dual-range-control__input-group input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.dual-range-control__slider {
+  position: relative;
+  height: 34px;
+}
+
+.dual-range-control__track {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--default-border-color) 0%,
+    var(--default-border-color) var(--dual-range-fill-start, 0%),
+    var(--brand-primary-color) var(--dual-range-fill-start, 0%),
+    var(--brand-primary-color) var(--dual-range-fill-end, 100%),
+    var(--default-border-color) var(--dual-range-fill-end, 100%),
+    var(--default-border-color) 100%
+  );
+  transform: translateY(-50%);
+}
+
+.dual-range-control__slider input[type="range"] {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  pointer-events: none;
+}
+
+.dual-range-control__slider input[type="range"]:focus {
+  outline: none;
+}
+
+.dual-range-control__slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.dual-range-control__slider input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+
+.dual-range-control__slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-base-color);
+  background: var(--brand-primary-color);
+  box-shadow: 0 0 0 1px var(--brand-primary-color);
+}
+
+.dual-range-control__slider input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-base-color);
+  background: var(--brand-primary-color);
+  box-shadow: 0 0 0 1px var(--brand-primary-color);
 }
 
 .apply-filters-btn {
@@ -1076,6 +1290,18 @@ select {
   gap: 12px;
 }
 
+.build-slot-row--clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.build-slot-row--clickable:hover,
+.build-slot-row--clickable:focus-visible {
+  background-color: var(--category-card-bg-color);
+  outline: none;
+}
+
 .build-slot-details {
   flex: 1;
   min-width: 0;
@@ -1131,6 +1357,33 @@ select {
   gap: 2px;
 }
 
+.value-progress {
+  width: 68px;
+  max-width: 68px;
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(31, 191, 143, 0.2);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.value-progress::-webkit-progress-bar {
+  background: rgba(31, 191, 143, 0.2);
+  border-radius: 999px;
+}
+
+.value-progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #1fbf8f 0%, #1f8fcf 100%);
+  border-radius: 999px;
+}
+
+.value-progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #1fbf8f 0%, #1f8fcf 100%);
+  border-radius: 999px;
+}
+
 .value-zap-icon {
   width: 12px;
   height: 12px;
@@ -1139,7 +1392,9 @@ select {
 }
 
 .value-zap-icon--extra {
-  margin-left: 2px;
+  width: 9px;
+  height: 9px;
+  margin-left: 1px;
 }
 
 .value-rating-number {
