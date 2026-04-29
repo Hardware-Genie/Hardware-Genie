@@ -1,4 +1,4 @@
-# Hardware-Genie Rebuild Checklist (Destroy + Re-Apply)
+# Hardware-Genie AWS Rebuild Checklist (Destroy + Re-Apply)
 
 Use this checklist when you want a repeatable teardown and rebuild of the full stack.
 

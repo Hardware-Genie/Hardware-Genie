@@ -23,7 +23,7 @@ $env:PYTHONPATH = 'src'
 celery -A app.tasks.celery worker --pool=solo --loglevel=info
 ```
 After running the celery worker, you can trigger scrapers from the Scrapers page on the website.
-This requires an admin user to use. Create a user by filling out the Sign Up form. You can then make that user an admin by running the following scritp from the project root:
+This requires an admin user to use. Create a user by filling out the Sign Up form. You can then make that user an admin by running the following script from the project root:
 
 ```powershell
 cd src/app
