@@ -31,13 +31,5 @@ python make_admin.py --email "<email_of_user_to_make_admin>"
 ```
 With an admin user, you can access the Scrapers page and trigger scrapers to run. You can also access the Value Analysis page, which allows recalculating the category's value rating when adding new products. 
 
-# Running the project on AWS 
-Build + run one-time seed:
-```powershell
-Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
-.\scripts\terraform-build.ps1 -DbPassword "greatpassword" -SeedAfterBuild
-```
-More commands in the [REBUILD_CHECKLIST.md](REBUILD_CHECKLIST.md) file
-
 # Model used for Sentiment analysis
 https://huggingface.co/mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis/discussions
