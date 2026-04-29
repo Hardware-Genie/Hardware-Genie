@@ -42,6 +42,21 @@ class ArticleScraperForm(FlaskForm):
     )
     submit = SubmitField('Analyze Heading')
 
+
+class ValueAnalysisForm(FlaskForm):
+    category = SelectField(
+        'Category',
+        validators=[DataRequired()],
+        choices=[
+            ('cpu', 'CPU'),
+            ('memory', 'Memory (RAM)'),
+            ('motherboard', 'Motherboard'),
+            ('power_supply', 'Power Supply'),
+            ('video_card', 'Video Card'),
+        ],
+    )
+    submit = SubmitField('Run Value Analysis')
+
 class SignupForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     email = StringField('Email', validators=[DataRequired(), Email()])

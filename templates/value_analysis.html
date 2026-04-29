@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block main %}
+{% include "partials/header.html" %}
+<section class="scraper-page">
+    <div class="scraper-card">
+        <a class="back-button" href="{{ url_for('scrapers') }}">← Back to Scrapers</a>
+        <h2 class="scraper-title">Value Analysis</h2>
+        <p class="scraper-subtitle">Choose a part category to run its database-backed value analysis script.</p>
+
+        <form class="auth-form scraper-form" action="" method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <label class="auth-label" for="category">{{ form.category.label.text }}</label>
+            {{ form.category(class_='auth-input', id='category') }}
+
+            {{ form.submit(class_='auth-submit') }}
+        </form>
+
+        {% if analysis_result %}
+            <div class="status-pill status-pill--success" style="margin-top: 20px;">Completed</div>
+            <p class="status-meta">{{ analysis_result }}</p>
+        {% endif %}
+
+        {% if analysis_error %}
+            <div class="status-pill status-pill--failure" style="margin-top: 20px;">Failed</div>
+            <p class="status-meta">{{ analysis_error }}</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

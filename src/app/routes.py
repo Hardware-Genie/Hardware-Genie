@@ -2,6 +2,8 @@
 from functools import lru_cache
 from logging import exception
 from bisect import bisect_right
+import subprocess
+import sys
 
 from flask import Flask, render_template, jsonify, redirect, url_for, request
 from sqlalchemy import inspect, text
@@ -13,7 +15,7 @@ import json
 import re
 from urllib.parse import urlencode, urlparse
 
-from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm
+from app.forms import LoginForm, SignupForm, ProfileForm, ResetPasswordForm, PartScraperForm, ArticleScraperForm, ValueAnalysisForm
 from app.models import User, SavedBuild, ArticleSentiment
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders import wayback_newegg
 from app.wayback_newegg_scrapy.wayback_newegg_scrapy.spiders.wayback_newegg import WaybackNeweggSpider
@@ -299,6 +301,36 @@ def _is_admin_user():
         return False
 
     return bool(getattr(current_user, 'is_admin', False))
+
+
+VALUE_ANALYSIS_SCRIPT_MAP = {
+    'cpu': 'cpu_value_analysis_db.py',
+    'memory': 'ram_value_analysis_db.py',
+    'motherboard': 'motherboard_value_analysis_db.py',
+    'power_supply': 'power_supply_value_analysis_db.py',
+    'video_card': 'video_card_analysis_db.py',
+}
+
+
+def _run_value_analysis_script(category):
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    script_name = VALUE_ANALYSIS_SCRIPT_MAP.get(category)
+    if not script_name:
+        raise ValueError(f'Unsupported value analysis category: {category}')
+
+    script_path = os.path.join(project_root, 'part_value_analysis', script_name)
+    result = subprocess.run(
+        [sys.executable, script_path],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+
+    output = (result.stdout or '').strip() or (result.stderr or '').strip()
+    if result.returncode != 0:
+        raise RuntimeError(output or f'{script_name} failed with exit code {result.returncode}')
+
+    return output or f'{script_name} completed successfully.'
 
 
 def _hash_password(password):
@@ -816,6 +848,30 @@ def scrapers():
         return redirect(url_for('index'))
 
     return render_template('scrapers.html')
+
+
+@app.route('/value-analysis', methods=['GET', 'POST'])
+@login_required
+def value_analysis():
+    if not _is_admin_user():
+        return redirect(url_for('index'))
+
+    form = ValueAnalysisForm()
+    analysis_result = None
+    analysis_error = None
+
+    if form.validate_on_submit():
+        try:
+            analysis_result = _run_value_analysis_script(form.category.data)
+        except Exception as exc:
+            analysis_error = str(exc)
+
+    return render_template(
+        'value_analysis.html',
+        form=form,
+        analysis_result=analysis_result,
+        analysis_error=analysis_error,
+    )
 
 
 def _invoke_scraper_lambda(url, category):
