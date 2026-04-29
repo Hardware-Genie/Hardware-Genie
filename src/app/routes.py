@@ -423,9 +423,9 @@ def _sorted_value_baseline_for_table(table_name, group_cols):
 
     group_by_cols = ", ".join(group_cols)
     baseline_sql = text(f"""
-    SELECT price
+    SELECT value
     FROM (
-        SELECT price,
+        SELECT value,
                ROW_NUMBER() OVER (PARTITION BY {group_by_cols} ORDER BY snapshot_date DESC) as rn
         FROM {table_name}
     )
@@ -435,7 +435,7 @@ def _sorted_value_baseline_for_table(table_name, group_cols):
     baseline_rows = db.session.execute(baseline_sql).mappings().all()
     baseline_values = []
     for baseline_row in baseline_rows:
-        baseline_value = _safe_parse_price(baseline_row.get('price'))
+        baseline_value = _safe_parse_price(baseline_row.get('value'))
         if baseline_value is not None:
             baseline_values.append(baseline_value)
 
@@ -1601,7 +1601,7 @@ def item_history():
         group_cols = _category_group_columns(category)
         baseline_values = _sorted_value_baseline_for_table(category, group_cols)
         latest_row = rows[-1] if rows else None
-        latest_value_raw = _safe_parse_price(latest_row.get('price')) if latest_row else None
+        latest_value_raw = _safe_parse_price(latest_row.get('value')) if latest_row else None
         latest_percentile = _percentile_rank(baseline_values, latest_value_raw)
         if latest_percentile is not None:
             latest_value_normalized = round((latest_percentile / 100.0) * 5.0, 3)
