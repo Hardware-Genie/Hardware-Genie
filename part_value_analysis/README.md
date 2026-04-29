@@ -14,6 +14,7 @@ These scripts do **not** use CSV files.
 - `motherboard_value_analysis_db.py`
 - `power_supply_value_analysis_db.py`
 - `ram_value_analysis_db.py`
+- `video_card_analysis_db.py`
 - `run_all_value_analysis.py`
 
 ## Run from project root
@@ -24,6 +25,7 @@ python ../../part_value_analysis/cpu_value_analysis_db.py
 python ../../part_value_analysis/motherboard_value_analysis_db.py
 python ../../part_value_analysis/power_supply_value_analysis_db.py
 python ../../part_value_analysis/ram_value_analysis_db.py
+python ../../part_value_analysis/video_card_analysis_db.py
 ```
 
 Or run all:
