@@ -50,6 +50,7 @@ class ValueAnalysisForm(FlaskForm):
         choices=[
             ('cpu', 'CPU'),
             ('memory', 'Memory (RAM)'),
+            ('internal_hard_drive', 'Internal Hard Drive'),
             ('motherboard', 'Motherboard'),
             ('power_supply', 'Power Supply'),
             ('video_card', 'Video Card'),

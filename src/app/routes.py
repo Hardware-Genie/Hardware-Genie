@@ -306,6 +306,7 @@ def _is_admin_user():
 VALUE_ANALYSIS_SCRIPT_MAP = {
     'cpu': 'cpu_value_analysis_db.py',
     'memory': 'ram_value_analysis_db.py',
+    'internal_hard_drive': 'internal_hard_drive_analysis_db.py',
     'motherboard': 'motherboard_value_analysis_db.py',
     'power_supply': 'power_supply_value_analysis_db.py',
     'video_card': 'video_card_analysis_db.py',
