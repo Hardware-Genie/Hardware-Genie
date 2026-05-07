@@ -94,6 +94,7 @@ if (-not $SkipEcsScaleDown) {
 
 Invoke-TerraformDestroy -ModulePath (Join-Path $repoRoot "infra/ecs") -NeedsDbPassword
 Invoke-TerraformDestroy -ModulePath (Join-Path $repoRoot "infra/lambda") -NeedsDbPassword
+Invoke-TerraformDestroy -ModulePath (Join-Path $repoRoot "infra/value_analysis") -NeedsDbPassword
 Clear-EcrRepositoryImages -RepositoryName $EcrRepository
 Invoke-TerraformDestroy -ModulePath (Join-Path $repoRoot "infra/docker")
 Invoke-TerraformDestroy -ModulePath (Join-Path $repoRoot "infra/rds") -NeedsDbPassword

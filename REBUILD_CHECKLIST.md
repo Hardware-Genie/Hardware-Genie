@@ -17,14 +17,14 @@ Build everything:
 
 ```powershell
 Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
-.\scripts\terraform-build.ps1 -DbPassword "greatpassword"
+.\scripts\terraform-build.ps1 -DbPassword "greatpassword" -AllowedSshCidr "174.63.109.102/32"
 ```
 
 Build + run one-time seed:
 
 ```powershell
 Set-Location "c:\Users\manam\Desktop\4360 cs Senior Experience\Hardware-Genie"
-.\scripts\terraform-build.ps1 -DbPassword "greatpassword" -SeedAfterBuild
+.\scripts\terraform-build.ps1 -DbPassword "greatpassword" -AllowedSshCidr "174.63.109.102/32" -SeedAfterBuild
 ```
 
 ## Prerequisites
@@ -57,6 +57,22 @@ Destroy ECS:
 
 ```powershell
 Set-Location ".\infra\ecs"
+terraform init
+terraform destroy --auto-approve -var "db_password=greatpassword"
+```
+
+Destroy Lambda:
+
+```powershell
+Set-Location "..\lambda"
+terraform init
+terraform destroy --auto-approve -var "db_password=greatpassword"
+```
+
+Destroy Value Analysis:
+
+```powershell
+Set-Location "..\value_analysis"
 terraform init
 terraform destroy --auto-approve -var "db_password=greatpassword"
 ```

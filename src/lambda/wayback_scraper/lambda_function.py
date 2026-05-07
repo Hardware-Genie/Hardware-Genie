@@ -21,6 +21,7 @@ import sys
 
 
 SCRAPY_PROJECT_DIR = os.path.join(os.path.dirname(__file__), "wayback_newegg_scrapy")
+TASK_ROOT = os.path.dirname(__file__)
 
 
 def _database_url():
@@ -36,7 +37,7 @@ def handler(event, context):
     env = {
         **os.environ,
         "DATABASE_URL": _database_url(),
-        "PYTHONPATH": os.path.dirname(__file__),
+        "PYTHONPATH": os.pathsep.join([TASK_ROOT, SCRAPY_PROJECT_DIR]),
     }
 
     if event.get("from_date"):

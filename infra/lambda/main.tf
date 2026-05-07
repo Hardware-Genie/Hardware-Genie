@@ -43,7 +43,11 @@ locals {
   rds_dns_endpoint   = coalesce(var.rds_dns_endpoint, try(data.terraform_remote_state.rds.outputs.rds_dns_endpoint, null))
   database_url       = "postgresql+psycopg2://${var.db_username}:${urlencode(var.db_password)}@${local.rds_dns_endpoint}:${var.db_port}/${var.db_name}?sslmode=require"
   src_dir            = abspath("${path.module}/../../src/lambda/wayback_scraper")
-  src_hash           = sha256(join("", [for f in fileset(local.src_dir, "**") : filesha256("${local.src_dir}/${f}")]))
+  spider_dir         = abspath("${path.module}/../../src/app/wayback_newegg_scrapy")
+  src_hash           = sha256(join("", concat(
+    [for f in fileset(local.src_dir, "**") : filesha256("${local.src_dir}/${f}")],
+    [for f in fileset(local.spider_dir, "**") : filesha256("${local.spider_dir}/${f}")]
+  )))
   zip_path           = "${path.module}/wayback_scraper.zip"
 }
 

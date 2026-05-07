@@ -34,10 +34,10 @@ class ArticleScraperForm(FlaskForm):
         choices=[
             ('cpu', 'CPU'),
             ('memory', 'Memory'),
-            ('video-card', 'Video Card'),
+            ('video_card', 'Video Card'),
             ('motherboard', 'Motherboard'),
-            ('power-supply', 'Power Supply'),
-            ('internal-hard-drive', 'Internal Hard Drive'),
+            ('power_supply', 'Power Supply'),
+            ('internal_hard_drive', 'Internal Hard Drive'),
         ],
     )
     submit = SubmitField('Analyze Heading')

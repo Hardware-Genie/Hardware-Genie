@@ -717,19 +717,6 @@ def login():
         password_reset_debug_flow=app.config.get('PASSWORD_RESET_DEBUG_FLOW', False),
     )
 
-
-@app.route('/password-reset-preview')
-def password_reset_preview():
-    if not app.config.get('PASSWORD_RESET_DEBUG_FLOW', False):
-        return redirect(url_for('reset_password'))
-
-    return render_template(
-        'password_reset_preview.html',
-        redirect_url=url_for('reset_password'),
-        preview_image=url_for('static', filename='images/angai313-spongebob-sad.gif'),
-    )
-
-
 @app.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
     form = ResetPasswordForm()
@@ -839,16 +826,17 @@ def scraper_redirect():
     if not _is_admin_user():
         return redirect(url_for('index'))
 
-    return redirect(url_for('scrapers'))
+    return redirect(url_for('admin_dashboard'))
 
 
+@app.route('/admin')
 @app.route('/scrapers')
 @login_required
-def scrapers():
+def admin_dashboard():
     if not _is_admin_user():
         return redirect(url_for('index'))
 
-    return render_template('scrapers.html')
+    return render_template('admin.html')
 
 
 @app.route('/value-analysis', methods=['GET', 'POST'])
@@ -945,6 +933,9 @@ def scraper_status_lambda(invocation_id):
         back_label='Back to Part Scraper',
         part_history_url=part_history_url,
         scrape_summary=None,
+        scraped_url=scraped_url,
+        scraped_category=scraped_category,
+        part_name=part_name,
     )
 
 
@@ -955,12 +946,31 @@ def scraper_articles():
         return redirect(url_for('index'))
 
     form = ArticleScraperForm()
+    article_result = None
+    article_error = None
+
     if form.validate_on_submit():
         heading = (form.heading.data or '').strip()
         category = (form.category.data or '').strip()
-        task = tasks.analyze_article_heading.delay(heading=heading, category=category)
-        return redirect(url_for('scraper_status', task_id=task.id, scraper='articles'))
-    return render_template('scraper_articles.html', form=form)
+        try:
+            from app.sentiment_sampling import sentemantic_analysis
+            analysis = sentemantic_analysis(heading)
+            sentiment = analysis.get('label', 'unsure')
+            score = float(analysis.get('score') or 0.0)
+            record = ArticleSentiment(
+                heading=heading,
+                category=category,
+                sentiment=sentiment,
+                score=score,
+            )
+            db.session.add(record)
+            db.session.commit()
+            article_result = {'heading': heading, 'category': category, 'sentiment': sentiment, 'score': round(score, 4)}
+        except Exception as exc:
+            db.session.rollback()
+            article_error = str(exc)
+
+    return render_template('scraper_articles.html', form=form, article_result=article_result, article_error=article_error)
 
 @app.route('/scraper/status/<task_id>')
 @login_required
@@ -1081,7 +1091,7 @@ def search():
         params = {}
 
         if query:
-            where_parts.append("name LIKE :q")
+            where_parts.append("LOWER(name) LIKE LOWER(:q)")
             params["q"] = f"%{query}%"
 
         # 2. Define identifying columns and grouping logic

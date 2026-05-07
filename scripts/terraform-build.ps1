@@ -4,7 +4,11 @@ param(
 
     [string]$Region = "us-west-1",
 
-    [switch]$SeedAfterBuild
+    [string]$AllowedSshCidr = "",
+
+    [switch]$SeedAfterBuild,
+
+    [switch]$SeedOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,6 +73,98 @@ function Build-WaybackScraperZip {
     }
     finally {
         docker rm $containerId | Out-Null
+    }
+}
+
+function Remove-OrphanedLambdaResources {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FunctionName,
+
+        [switch]$HasEventBridgeRule
+    )
+
+    $roleName = "$FunctionName-role"
+    $sgName = "$FunctionName-sg"
+    $logGroupName = "/aws/lambda/$FunctionName"
+    $scheduleName = "$FunctionName-schedule"
+
+    Write-Host "Checking for orphaned resources for $FunctionName ..." -ForegroundColor Yellow
+
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # Delete function if it exists (non-fatal if it doesn't)
+        aws lambda get-function --function-name $FunctionName --region $Region 1>$null 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            aws lambda delete-function --function-name $FunctionName --region $Region 1>$null 2>$null
+            Write-Host "Deleted existing Lambda function $FunctionName" -ForegroundColor Yellow
+        }
+
+        if ($HasEventBridgeRule) {
+            aws events describe-rule --name $scheduleName --region $Region 1>$null 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                aws events remove-targets --rule $scheduleName --ids "wayback-scraper" --region $Region 1>$null 2>$null
+                aws events delete-rule --name $scheduleName --region $Region 1>$null 2>$null
+                Write-Host "Removed EventBridge rule $scheduleName" -ForegroundColor Yellow
+            }
+        }
+
+        $rdsSgId = aws ec2 describe-security-groups --filters "Name=group-name,Values=hardware-genie-postgres-sg" --region $Region --query "SecurityGroups[0].GroupId" --output text 2>$null
+        if ($rdsSgId -eq 'None') { $rdsSgId = $null }
+
+        $lambdaSgId = aws ec2 describe-security-groups --filters "Name=group-name,Values=$sgName" --region $Region --query "SecurityGroups[0].GroupId" --output text 2>$null
+        if ($lambdaSgId -and $lambdaSgId -ne 'None') {
+            if ($rdsSgId) {
+                aws ec2 revoke-security-group-ingress --group-id $rdsSgId --protocol tcp --port 5432 --source-group $lambdaSgId --region $Region 1>$null 2>$null
+                Write-Host "Revoked postgres ingress from $lambdaSgId" -ForegroundColor Yellow
+            }
+
+            $deleted = $false
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+                aws ec2 delete-security-group --group-id $lambdaSgId --region $Region 1>$null 2>$null
+                if ($LASTEXITCODE -eq 0) { $deleted = $true; break }
+
+                Write-Host "Waiting for Lambda ENI cleanup before deleting $sgName (attempt $attempt/5) ..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 10
+            }
+
+            if (-not $deleted) {
+                Write-Warning "Could not delete orphaned security group $sgName. Terraform will handle it on apply."
+            }
+            else {
+                Write-Host "Deleted security group $sgName" -ForegroundColor Yellow
+            }
+        }
+
+        aws logs describe-log-groups --log-group-name-prefix $logGroupName --region $Region --query "logGroups[0].logGroupName" --output text 1>$null 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            aws logs delete-log-group --log-group-name $logGroupName --region $Region 1>$null 2>$null
+            Write-Host "Deleted log group $logGroupName" -ForegroundColor Yellow
+        }
+
+        $managedPolicies = aws iam list-attached-role-policies --role-name $roleName --query "AttachedPolicies[].PolicyArn" --output text 2>$null
+        if ($managedPolicies) {
+            foreach ($policyArn in ($managedPolicies -split "`t|\s+" | Where-Object { $_ })) {
+                aws iam detach-role-policy --role-name $roleName --policy-arn $policyArn 1>$null 2>$null
+            }
+        }
+
+        $inlinePolicies = aws iam list-role-policies --role-name $roleName --query "PolicyNames[]" --output text 2>$null
+        if ($inlinePolicies) {
+            foreach ($policyName in ($inlinePolicies -split "`t|\s+" | Where-Object { $_ })) {
+                aws iam delete-role-policy --role-name $roleName --policy-name $policyName 1>$null 2>$null
+            }
+        }
+
+        aws iam get-role --role-name $roleName 1>$null 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            aws iam delete-role --role-name $roleName 1>$null 2>$null
+            Write-Host "Deleted IAM role $roleName" -ForegroundColor Yellow
+        }
+    }
+    finally {
+        $ErrorActionPreference = $oldErrorAction
     }
 }
 
@@ -155,13 +251,40 @@ function Invoke-OneTimeSeedTask {
     }
 }
 
+if ($SeedOnly) {
+    Wait-ForEcsServiceSteady -ClusterName "hardware-genie-cluster" -ServiceName "hardware-genie-service"
+    Invoke-OneTimeSeedTask -ClusterName "hardware-genie-cluster" -ServiceName "hardware-genie-service"
+    exit 0
+}
+
 Write-Host "Starting full infrastructure build in region $Region" -ForegroundColor Yellow
 
 Invoke-TerraformApply -ModulePath (Join-Path $repoRoot "infra/vpc")
-Invoke-TerraformApply -ModulePath (Join-Path $repoRoot "infra/rds") -NeedsDbPassword
+# Apply RDS module. If AllowedSshCidr was provided, pass it to terraform to avoid interactive input.
+$rdsModulePath = (Join-Path $repoRoot "infra/rds")
+Push-Location $rdsModulePath
+try {
+    Write-Host "`n=== Applying module: infra/rds ===" -ForegroundColor Cyan
+    terraform init
+    if ($LASTEXITCODE -ne 0) { throw "terraform init failed in infra/rds" }
+
+    if ([string]::IsNullOrEmpty($AllowedSshCidr)) {
+        terraform apply --auto-approve -var "db_password=$DbPassword"
+    }
+    else {
+        terraform apply --auto-approve -var "db_password=$DbPassword" -var "allowed_ssh_cidr=$AllowedSshCidr"
+    }
+
+    if ($LASTEXITCODE -ne 0) { throw "terraform apply failed in infra/rds" }
+}
+finally {
+    Pop-Location
+}
 Invoke-TerraformApply -ModulePath (Join-Path $repoRoot "infra/docker")
 
 Build-WaybackScraperZip -RepoRoot $repoRoot
+
+Remove-OrphanedLambdaResources -FunctionName "hardware-genie-value-analysis"
 
 # Deploy value analysis Lambda first so we can pass its ARN to the scraper
 Push-Location (Join-Path $repoRoot "infra/value_analysis")
@@ -176,6 +299,23 @@ try {
 }
 finally {
     Pop-Location
+}
+
+Remove-OrphanedLambdaResources -FunctionName "hardware-genie-wayback-scraper" -HasEventBridgeRule
+
+# If the SG still exists after cleanup (e.g. ENIs not yet detached), import it into
+# Terraform state so apply updates it in-place instead of failing with Duplicate.
+$lambdaModulePath = Join-Path $repoRoot "infra/lambda"
+$existingSgId = aws ec2 describe-security-groups --filters "Name=group-name,Values=hardware-genie-wayback-scraper-sg" --region $Region --query "SecurityGroups[0].GroupId" --output text 2>$null
+if ($existingSgId -and $existingSgId -ne 'None') {
+    Write-Host "SG hardware-genie-wayback-scraper-sg ($existingSgId) still exists - importing into Terraform state..." -ForegroundColor Yellow
+    Push-Location $lambdaModulePath
+    try {
+        terraform init -input=false | Out-Null
+        terraform import -var "db_password=$DbPassword" -var "value_analysis_lambda_arn=$ValueAnalysisLambdaArn" -var "value_analysis_function_name=$ValueAnalysisLambdaName" aws_security_group.lambda $existingSgId
+    } finally {
+        Pop-Location
+    }
 }
 
 # Deploy Lambda before ECS so we can pass its ARN into the ECS module

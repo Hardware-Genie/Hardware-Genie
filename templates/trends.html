@@ -19,7 +19,7 @@
 						data-category-key="{{ category.key }}"
 						style="padding: 8px 12px; border: 1px solid #38635a; background: #ffffff; color: #38635a; border-radius: 6px; cursor: pointer; font-weight: 600;"
 					>
-						Show Average Only
+						Show Range + Average
 					</button>
 				{% endif %}
 			</div>
@@ -154,13 +154,13 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 
-		let showRangeMode = true;
+		let showRangeMode = false;
 
 		const chart = new Chart(canvas.getContext('2d'), {
-			type: 'bar',
+			type: 'line',
 			data: {
 				labels: category.labels,
-				datasets: buildRangeDatasets(category)
+				datasets: buildAverageOnlyDataset(category)
 			},
 			options: {
 				responsive: true,
@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				},
 				scales: {
 					y: {
+						beginAtZero: true,
 						title: {
 							display: true,
 							text: 'Average Price ($)'

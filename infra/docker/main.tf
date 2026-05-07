@@ -109,7 +109,7 @@ resource "null_resource" "build_and_push_image" {
           break
         }
         Write-Host "docker push attempt $attempt failed."
-        Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 10))
+        Start-Sleep -Seconds ([Math]::Min(15 * $attempt, 60))
       }
       if (-not $pushSucceeded) { throw 'Docker push failed after multiple attempts.' }
     EOT

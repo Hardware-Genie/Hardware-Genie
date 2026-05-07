@@ -3,7 +3,7 @@
 {% include "partials/header.html" %}
 <section class="scraper-page">
     <div class="scraper-card">
-        <a class="back-button" href="{{ url_for('scrapers') }}">← Back to Scrapers</a>
+        <a class="back-button" href="{{ url_for('admin_dashboard') }}">← Back to Admin</a>
         <h1 class="scraper-title">Article Sentiment Analyzer</h1>
         <p class="scraper-subtitle">Save the sentiment of an article heading and group it by category for the trends page.</p>
 
@@ -17,6 +17,18 @@
 
             {{ form.submit(class_='auth-submit') }}
         </form>
+
+        {% if article_result %}
+        <div class="scraper-result" style="margin-top:1.5rem;padding:1rem;border-radius:8px;background:#1e2a1e;border:1px solid #4caf50;">
+            <strong style="color:#4caf50;">✓ Saved</strong>
+            <p style="margin:.5rem 0 0;">"{{ article_result.heading }}" → <strong>{{ article_result.sentiment }}</strong> (score: {{ article_result.score }}) in <em>{{ article_result.category }}</em></p>
+        </div>
+        {% elif article_error %}
+        <div class="scraper-result" style="margin-top:1.5rem;padding:1rem;border-radius:8px;background:#2a1e1e;border:1px solid #f44336;">
+            <strong style="color:#f44336;">✗ Error</strong>
+            <p style="margin:.5rem 0 0;">{{ article_error }}</p>
+        </div>
+        {% endif %}
     </div>
 </section>
 {% endblock %}
